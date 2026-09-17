@@ -95,6 +95,15 @@ public class MedStockBatch extends BaseEntity
     /** 是否已过期（查询条件，1已过期 2未过期） */
     private String expireFlag;
 
+    /** 批次剩余数量合计（关联查询，用于库存总量重算） */
+    private Long batchQtySum;
+
+    /** 库存主表总量（关联查询，用于库存总量重算） */
+    private Long stockQty;
+
+    /** 数量差异（关联查询，批次合计减库存总量） */
+    private Long diffQty;
+
     public void setBatchId(Long batchId) 
     {
         this.batchId = batchId;
@@ -293,6 +302,36 @@ public class MedStockBatch extends BaseEntity
     public String getExpireFlag() 
     {
         return expireFlag;
+    }
+
+    public void setBatchQtySum(Long batchQtySum) 
+    {
+        this.batchQtySum = batchQtySum;
+    }
+
+    public Long getBatchQtySum() 
+    {
+        return batchQtySum;
+    }
+
+    public void setStockQty(Long stockQty) 
+    {
+        this.stockQty = stockQty;
+    }
+
+    public Long getStockQty() 
+    {
+        return stockQty;
+    }
+
+    public void setDiffQty(Long diffQty) 
+    {
+        this.diffQty = diffQty;
+    }
+
+    public Long getDiffQty() 
+    {
+        return diffQty;
     }
 
     @Override

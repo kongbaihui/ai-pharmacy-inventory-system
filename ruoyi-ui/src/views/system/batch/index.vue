@@ -78,13 +78,13 @@
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5">
         <el-button
-          type="primary"
+          type="warning"
           plain
-          icon="el-icon-plus"
+          icon="el-icon-refresh-left"
           size="mini"
-          @click="handleAdd"
-          v-hasPermi="['system:batch:add']"
-        >新增批次</el-button>
+          @click="handleRecalc"
+          v-hasPermi="['system:batch:recalc']"
+        >重算库存总量</el-button>
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -135,16 +135,9 @@
             size="mini"
             type="text"
             icon="el-icon-edit"
-            @click="handleUpdate(scope.row)"
+            @click="handleExpiry(scope.row)"
             v-hasPermi="['system:batch:edit']"
-          >修改</el-button>
-          <el-button
-            size="mini"
-            type="text"
-            icon="el-icon-delete"
-            @click="handleDelete(scope.row)"
-            v-hasPermi="['system:batch:remove']"
-          >删除</el-button>
+          >修正效期</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -157,20 +150,35 @@
       @pagination="getList"
     />
 
-    <!-- 添加或修改药品批次对话框 -->
+    <!-- 修正批次效期信息对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="700px" append-to-body>
+      <el-alert
+        title="批次数量由入库、出库、盘点、过期清理等业务产生，此处只能修改效期相关信息"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
       <el-form ref="form" :model="form" :rules="rules" label-width="110px">
         <el-row>
           <el-col :span="12">
-            <el-form-item label="药品" prop="medId">
-              <el-select v-model="form.medId" filterable placeholder="请选择药品">
-                <el-option
-                  v-for="item in medOptions"
-                  :key="item.medId"
-                  :label="item.medName"
-                  :value="item.medId"
-                />
-              </el-select>
+            <el-form-item label="药品名称">
+              <el-input v-model="form.medName" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生产批号">
+              <el-input v-model="form.batchNo" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="批次数量">
+              <el-input v-model="form.batchQty" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="剩余数量">
+              <el-input v-model="form.remainQty" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -183,11 +191,6 @@
                   :value="item.supplierId"
                 />
               </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="生产批号" prop="batchNo">
-              <el-input v-model="form.batchNo" placeholder="请输入生产批号" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -210,21 +213,6 @@
               </el-date-picker>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="批次入库数量" prop="batchQty">
-              <el-input-number v-model="form.batchQty" :min="0" controls-position="right" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="批次剩余数量" prop="remainQty">
-              <el-input-number v-model="form.remainQty" :min="0" controls-position="right" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="批次进价" prop="purchasePrice">
-              <el-input-number v-model="form.purchasePrice" :precision="2" :min="0" controls-position="right" />
-            </el-form-item>
-          </el-col>
           <el-col :span="24">
             <el-form-item label="备注" prop="remark">
               <el-input v-model="form.remark" type="textarea" placeholder="请输入内容" />
@@ -241,8 +229,7 @@
 </template>
 
 <script>
-import { listBatch, getBatch, delBatch, addBatch, updateBatch, refreshBatch, getExpirySummary } from "@/api/system/batch"
-import { optionselectInfo } from "@/api/system/info"
+import { listBatch, getBatch, refreshBatch, getExpirySummary, updateBatchExpiry, recalcBatchStock } from "@/api/system/batch"
 import { optionselectSupplier } from "@/api/system/supplier"
 
 export default {
@@ -259,8 +246,6 @@ export default {
       batchList: [],
       // 效期统计
       summary: {},
-      // 药品下拉选项
-      medOptions: [],
       // 供应商下拉选项
       supplierOptions: [],
       // 有效期范围
@@ -282,12 +267,6 @@ export default {
       form: {},
       // 表单校验
       rules: {
-        medId: [
-          { required: true, message: "药品不能为空", trigger: "change" }
-        ],
-        batchNo: [
-          { required: true, message: "生产批号不能为空", trigger: "blur" }
-        ],
         expireDate: [
           { required: true, message: "有效期不能为空", trigger: "change" }
         ]
@@ -297,7 +276,6 @@ export default {
   created() {
     this.getList()
     this.getSummary()
-    this.getMedOptions()
     this.getSupplierOptions()
   },
   methods: {
@@ -319,12 +297,6 @@ export default {
     getSummary() {
       getExpirySummary().then(response => {
         this.summary = response.data || {}
-      })
-    },
-    /** 查询药品下拉选项 */
-    getMedOptions() {
-      optionselectInfo().then(response => {
-        this.medOptions = response.data
       })
     },
     /** 查询供应商下拉选项 */
@@ -369,14 +341,13 @@ export default {
     reset() {
       this.form = {
         batchId: null,
-        medId: null,
-        supplierId: null,
+        medName: null,
         batchNo: null,
+        batchQty: null,
+        remainQty: null,
+        supplierId: null,
         produceDate: null,
         expireDate: null,
-        batchQty: 0,
-        remainQty: 0,
-        purchasePrice: 0,
         remark: null
       }
       this.resetForm("form")
@@ -400,51 +371,37 @@ export default {
         this.getSummary()
       })
     },
-    /** 新增按钮操作 */
-    handleAdd() {
-      this.reset()
-      this.open = true
-      this.title = "添加药品批次"
-    },
-    /** 修改按钮操作 */
-    handleUpdate(row) {
+    /** 修正效期按钮操作 */
+    handleExpiry(row) {
       this.reset()
       getBatch(row.batchId).then(response => {
         this.form = response.data
         this.open = true
-        this.title = "修改药品批次"
+        this.title = "修正批次效期信息"
       })
     },
-    /** 提交按钮 */
+    /** 提交效期信息 */
     submitForm() {
       this.$refs["form"].validate(valid => {
         if (valid) {
-          if (this.form.batchId != null) {
-            updateBatch(this.form).then(response => {
-              this.$modal.msgSuccess("修改成功")
-              this.open = false
-              this.getList()
-              this.getSummary()
-            })
-          } else {
-            addBatch(this.form).then(response => {
-              this.$modal.msgSuccess("新增成功")
-              this.open = false
-              this.getList()
-              this.getSummary()
-            })
-          }
+          updateBatchExpiry(this.form).then(response => {
+            this.$modal.msgSuccess("效期信息已更新")
+            this.open = false
+            this.getList()
+            this.getSummary()
+          })
         }
       })
     },
-    /** 删除按钮操作 */
-    handleDelete(row) {
-      this.$modal.confirm('是否确认删除批号为"' + row.batchNo + '"的批次数据？').then(function() {
-        return delBatch(row.batchId)
-      }).then(() => {
+    /** 按批次剩余数量重算库存总量 */
+    handleRecalc() {
+      this.$modal.confirm('将按批次剩余数量之和重算各药品的库存总量，并写入库存流水，是否继续？').then(function() {
+        return recalcBatchStock()
+      }).then(response => {
+        const data = response.data || {}
         this.getList()
         this.getSummary()
-        this.$modal.msgSuccess("删除成功")
+        this.$modal.msgSuccess("重算完成，发现差异 " + (data.diffCount || 0) + " 条，已修正 " + (data.fixedCount || 0) + " 条")
       }).catch(() => {})
     },
     /** 导出按钮操作 */

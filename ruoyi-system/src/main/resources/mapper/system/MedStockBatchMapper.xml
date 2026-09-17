@@ -28,6 +28,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="supplierName"    column="supplier_name"    />
         <result property="remainDays"    column="remain_days"    />
         <result property="warnDays"    column="warn_days"    />
+        <result property="batchQtySum"    column="batch_qty_sum"    />
+        <result property="stockQty"    column="stock_qty"    />
+        <result property="diffQty"    column="diff_qty"    />
     </resultMap>
 
     <sql id="selectMedStockBatchVo">
@@ -139,6 +142,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status = '1') as nearQty,
             (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status = '2') as expiredQty,
             (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status in ('0', '1')) as normalQty
+    </select>
+
+    <select id="selectStockQtyDiffList" resultMap="MedStockBatchResult">
+        select m.med_id, m.med_name, m.med_spec,
+               ifnull(sum(b.remain_qty), 0) as batch_qty_sum,
+               ifnull(s.total_qty, 0) as stock_qty,
+               ifnull(sum(b.remain_qty), 0) - ifnull(s.total_qty, 0) as diff_qty
+        from med_info m
+        left join med_stock_batch b on b.med_id = m.med_id and b.batch_status != '3'
+        left join med_stock s on s.med_id = m.med_id
+        group by m.med_id, m.med_name, m.med_spec, s.total_qty
+        having diff_qty != 0
+        order by m.med_id
     </select>
 
     <delete id="deleteMedStockBatchByBatchId" parameterType="Long">

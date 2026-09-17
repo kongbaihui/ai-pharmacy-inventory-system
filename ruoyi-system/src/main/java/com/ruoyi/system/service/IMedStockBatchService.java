@@ -29,36 +29,23 @@ public interface IMedStockBatchService
     public List<MedStockBatch> selectMedStockBatchList(MedStockBatch medStockBatch);
 
     /**
-     * 新增药品库存批次
+     * 维护批次效期信息（仅允许修改生产日期、有效期、供应商、备注，不允许修改数量）
      * 
      * @param medStockBatch 药品库存批次
      * @return 结果
      */
-    public int insertMedStockBatch(MedStockBatch medStockBatch);
+    public int updateBatchExpiry(MedStockBatch medStockBatch);
 
     /**
-     * 修改药品库存批次
+     * 按批次剩余数量重算库存总量
      * 
-     * @param medStockBatch 药品库存批次
-     * @return 结果
-     */
-    public int updateMedStockBatch(MedStockBatch medStockBatch);
-
-    /**
-     * 批量删除药品库存批次
+     * 批次数量是库存的明细，库存总量是汇总，正常情况下两者应保持一致。
+     * 本方法用于修正历史数据：逐种药品比较批次剩余数量之和与库存总量，
+     * 存在差异时通过统一库存变更服务调整库存并写入流水。
      * 
-     * @param batchIds 需要删除的药品库存批次主键集合
-     * @return 结果
+     * @return 重算结果（差异条数、修正条数、调整数量合计）
      */
-    public int deleteMedStockBatchByBatchIds(Long[] batchIds);
-
-    /**
-     * 删除药品库存批次信息
-     * 
-     * @param batchId 药品库存批次主键
-     * @return 结果
-     */
-    public int deleteMedStockBatchByBatchId(Long batchId);
+    public Map<String, Object> recalcStockQty();
 
     /**
      * 刷新批次效期状态：按药品近效期预警天数重新判定正常、临期、过期

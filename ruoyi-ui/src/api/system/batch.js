@@ -25,21 +25,20 @@ export function getBatch(batchId) {
   })
 }
 
-// 新增药品批次
-export function addBatch(data) {
+// 维护批次效期信息（仅生产日期、有效期、供应商、备注）
+export function updateBatchExpiry(data) {
   return request({
-    url: '/system/batch',
-    method: 'post',
+    url: '/system/batch/expiry',
+    method: 'put',
     data: data
   })
 }
 
-// 修改药品批次
-export function updateBatch(data) {
+// 按批次剩余数量重算库存总量
+export function recalcBatchStock() {
   return request({
-    url: '/system/batch',
-    method: 'put',
-    data: data
+    url: '/system/batch/recalcStock',
+    method: 'post'
   })
 }
 
@@ -48,13 +47,5 @@ export function refreshBatch() {
   return request({
     url: '/system/batch/refresh',
     method: 'put'
-  })
-}
-
-// 删除药品批次
-export function delBatch(batchId) {
-  return request({
-    url: '/system/batch/' + batchId,
-    method: 'delete'
   })
 }

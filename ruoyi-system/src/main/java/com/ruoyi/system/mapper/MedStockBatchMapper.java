@@ -83,4 +83,11 @@ public interface MedStockBatchMapper
      * @return 统计数据
      */
     public Map<String, Object> selectExpirySummary();
+
+    /**
+     * 查询库存总量与批次剩余数量之和不一致的药品（用于库存总量重算）
+     * 
+     * @return 差异数据集合
+     */
+    public List<MedStockBatch> selectStockQtyDiffList();
 }

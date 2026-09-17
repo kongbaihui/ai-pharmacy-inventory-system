@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -80,25 +79,17 @@ public class MedStockBatchController extends BaseController
     }
 
     /**
-     * 新增药品库存批次
-     */
-    @PreAuthorize("@ss.hasPermi('system:batch:add')")
-    @Log(title = "药品有效期", businessType = BusinessType.INSERT)
-    @PostMapping
-    public AjaxResult add(@RequestBody MedStockBatch medStockBatch)
-    {
-        return toAjax(medStockBatchService.insertMedStockBatch(medStockBatch));
-    }
-
-    /**
-     * 修改药品库存批次
+     * 维护批次效期信息
+     * 
+     * 批次数量由入库、出库、盘点、过期清理等业务变更，本接口只允许修改
+     * 生产日期、有效期、供应商与备注，避免库存总量与批次数量不一致。
      */
     @PreAuthorize("@ss.hasPermi('system:batch:edit')")
     @Log(title = "药品有效期", businessType = BusinessType.UPDATE)
-    @PutMapping
-    public AjaxResult edit(@RequestBody MedStockBatch medStockBatch)
+    @PutMapping("/expiry")
+    public AjaxResult expiry(@RequestBody MedStockBatch medStockBatch)
     {
-        return toAjax(medStockBatchService.updateMedStockBatch(medStockBatch));
+        return toAjax(medStockBatchService.updateBatchExpiry(medStockBatch));
     }
 
     /**
@@ -114,13 +105,16 @@ public class MedStockBatchController extends BaseController
     }
 
     /**
-     * 删除药品库存批次
+     * 按批次剩余数量重算库存总量
+     * 
+     * 用于修正批次剩余数量之和与库存总量不一致的数据，
+     * 调整过程统一走库存变更服务，会同步写入库存流水。
      */
-    @PreAuthorize("@ss.hasPermi('system:batch:remove')")
-    @Log(title = "药品有效期", businessType = BusinessType.DELETE)
-	@DeleteMapping("/{batchIds}")
-    public AjaxResult remove(@PathVariable Long[] batchIds)
+    @PreAuthorize("@ss.hasPermi('system:batch:recalc')")
+    @Log(title = "药品有效期", businessType = BusinessType.UPDATE)
+    @PostMapping("/recalcStock")
+    public AjaxResult recalcStock()
     {
-        return toAjax(medStockBatchService.deleteMedStockBatchByBatchIds(batchIds));
+        return success(medStockBatchService.recalcStockQty());
     }
 }
