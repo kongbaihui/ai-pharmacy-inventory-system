@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedStockBatchMapper">
+    
+    <resultMap type="MedStockBatch" id="MedStockBatchResult">
+        <result property="batchId"    column="batch_id"    />
+        <result property="medId"    column="med_id"    />
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="batchNo"    column="batch_no"    />
+        <result property="produceDate"    column="produce_date"    />
+        <result property="expireDate"    column="expire_date"    />
+        <result property="batchQty"    column="batch_qty"    />
+        <result property="remainQty"    column="remain_qty"    />
+        <result property="purchasePrice"    column="purchase_price"    />
+        <result property="inTime"    column="in_time"    />
+        <result property="batchStatus"    column="batch_status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+        <result property="medCode"    column="med_code"    />
+        <result property="medName"    column="med_name"    />
+        <result property="medSpec"    column="med_spec"    />
+        <result property="unit"    column="unit"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="remainDays"    column="remain_days"    />
+        <result property="warnDays"    column="warn_days"    />
+    </resultMap>
+
+    <sql id="selectMedStockBatchVo">
+        select b.batch_id, b.med_id, b.supplier_id, b.batch_no, b.produce_date, b.expire_date, b.batch_qty, b.remain_qty, b.purchase_price, b.in_time, b.batch_status, b.create_by, b.create_time, b.update_by, b.update_time, b.remark,
+               m.med_code, m.med_name, m.med_spec, m.unit, m.warn_days, s.supplier_name,
+               to_days(b.expire_date) - to_days(curdate()) as remain_days
+        from med_stock_batch b
+        left join med_info m on m.med_id = b.med_id
+        left join med_supplier s on s.supplier_id = b.supplier_id
+    </sql>
+
+    <select id="selectMedStockBatchList" parameterType="MedStockBatch" resultMap="MedStockBatchResult">
+        <include refid="selectMedStockBatchVo"/>
+        <where>  
+            <if test="batchNo != null  and batchNo != ''"> and b.batch_no like concat('%', #{batchNo}, '%')</if>
+            <if test="medId != null "> and b.med_id = #{medId}</if>
+            <if test="supplierId != null "> and b.supplier_id = #{supplierId}</if>
+            <if test="batchStatus != null  and batchStatus != ''"> and b.batch_status = #{batchStatus}</if>
+            <if test="categoryId != null "> and m.category_id = #{categoryId}</if>
+            <if test="expireFlag == '1'"> and b.expire_date &lt; curdate()</if>
+            <if test="expireFlag == '2'"> and b.expire_date &gt;= curdate()</if>
+            <if test="params.nearDays != null and params.nearDays != ''"> and b.expire_date &gt;= curdate() and b.expire_date &lt;= date_add(curdate(), interval #{params.nearDays} day)</if>
+            <if test="params.beginExpireDate != null and params.beginExpireDate != ''"> and b.expire_date &gt;= #{params.beginExpireDate}</if>
+            <if test="params.endExpireDate != null and params.endExpireDate != ''"> and b.expire_date &lt;= #{params.endExpireDate}</if>
+        </where>
+        order by b.expire_date, b.med_id
+    </select>
+    
+    <select id="selectMedStockBatchByBatchId" parameterType="Long" resultMap="MedStockBatchResult">
+        <include refid="selectMedStockBatchVo"/>
+        where b.batch_id = #{batchId}
+    </select>
+
+    <insert id="insertMedStockBatch" parameterType="MedStockBatch" useGeneratedKeys="true" keyProperty="batchId">
+        insert into med_stock_batch
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="medId != null">med_id,</if>
+            <if test="supplierId != null">supplier_id,</if>
+            <if test="batchNo != null and batchNo != ''">batch_no,</if>
+            <if test="produceDate != null">produce_date,</if>
+            <if test="expireDate != null">expire_date,</if>
+            <if test="batchQty != null">batch_qty,</if>
+            <if test="remainQty != null">remain_qty,</if>
+            <if test="purchasePrice != null">purchase_price,</if>
+            <if test="inTime != null">in_time,</if>
+            <if test="batchStatus != null">batch_status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="medId != null">#{medId},</if>
+            <if test="supplierId != null">#{supplierId},</if>
+            <if test="batchNo != null and batchNo != ''">#{batchNo},</if>
+            <if test="produceDate != null">#{produceDate},</if>
+            <if test="expireDate != null">#{expireDate},</if>
+            <if test="batchQty != null">#{batchQty},</if>
+            <if test="remainQty != null">#{remainQty},</if>
+            <if test="purchasePrice != null">#{purchasePrice},</if>
+            <if test="inTime != null">#{inTime},</if>
+            <if test="batchStatus != null">#{batchStatus},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedStockBatch" parameterType="MedStockBatch">
+        update med_stock_batch
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="medId != null">med_id = #{medId},</if>
+            <if test="supplierId != null">supplier_id = #{supplierId},</if>
+            <if test="batchNo != null and batchNo != ''">batch_no = #{batchNo},</if>
+            <if test="produceDate != null">produce_date = #{produceDate},</if>
+            <if test="expireDate != null">expire_date = #{expireDate},</if>
+            <if test="batchQty != null">batch_qty = #{batchQty},</if>
+            <if test="remainQty != null">remain_qty = #{remainQty},</if>
+            <if test="purchasePrice != null">purchase_price = #{purchasePrice},</if>
+            <if test="inTime != null">in_time = #{inTime},</if>
+            <if test="batchStatus != null">batch_status = #{batchStatus},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where batch_id = #{batchId}
+    </update>
+
+    <update id="updateBatchRemainQty">
+        update med_stock_batch set remain_qty = greatest(ifnull(remain_qty, 0) + #{changeQty}, 0), update_time = sysdate() where batch_id = #{batchId}
+    </update>
+
+    <update id="refreshBatchStatus">
+        update med_stock_batch b
+        left join med_info m on m.med_id = b.med_id
+        set b.batch_status = case
+                when ifnull(b.remain_qty, 0) &lt;= 0 then '3'
+                when b.expire_date &lt; curdate() then '2'
+                when b.expire_date &lt;= date_add(curdate(), interval ifnull(m.warn_days, 90) day) then '1'
+                else '0'
+            end,
+            b.update_time = sysdate()
+        where b.batch_status != '3' or ifnull(b.remain_qty, 0) &lt;= 0
+    </update>
+
+    <select id="selectExpirySummary" resultType="java.util.HashMap">
+        select
+            (select count(1) from med_stock_batch where batch_status = '1') as nearCount,
+            (select count(1) from med_stock_batch where batch_status = '2') as expiredCount,
+            (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status = '1') as nearQty,
+            (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status = '2') as expiredQty,
+            (select ifnull(sum(remain_qty), 0) from med_stock_batch where batch_status in ('0', '1')) as normalQty
+    </select>
+
+    <delete id="deleteMedStockBatchByBatchId" parameterType="Long">
+        delete from med_stock_batch where batch_id = #{batchId}
+    </delete>
+
+    <delete id="deleteMedStockBatchByBatchIds" parameterType="String">
+        delete from med_stock_batch where batch_id in 
+        <foreach item="batchId" collection="array" open="(" separator="," close=")">
+            #{batchId}
+        </foreach>
+    </delete>
+</mapper>

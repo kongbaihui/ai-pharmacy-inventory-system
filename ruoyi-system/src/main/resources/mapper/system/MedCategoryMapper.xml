@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedCategoryMapper">
+    
+    <resultMap type="MedCategory" id="MedCategoryResult">
+        <result property="categoryId"    column="category_id"    />
+        <result property="parentId"    column="parent_id"    />
+        <result property="ancestors"    column="ancestors"    />
+        <result property="categoryName"    column="category_name"    />
+        <result property="categoryCode"    column="category_code"    />
+        <result property="medType"    column="med_type"    />
+        <result property="orderNum"    column="order_num"    />
+        <result property="status"    column="status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectMedCategoryVo">
+        select category_id, parent_id, ancestors, category_name, category_code, med_type, order_num, status, create_by, create_time, update_by, update_time, remark from med_category
+    </sql>
+
+    <select id="selectMedCategoryList" parameterType="MedCategory" resultMap="MedCategoryResult">
+        <include refid="selectMedCategoryVo"/>
+        <where>  
+            <if test="parentId != null "> and parent_id = #{parentId}</if>
+            <if test="categoryName != null  and categoryName != ''"> and category_name like concat('%', #{categoryName}, '%')</if>
+            <if test="categoryCode != null  and categoryCode != ''"> and category_code like concat('%', #{categoryCode}, '%')</if>
+            <if test="medType != null  and medType != ''"> and med_type = #{medType}</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+        </where>
+        order by parent_id, order_num
+    </select>
+    
+    <select id="selectMedCategoryByCategoryId" parameterType="Long" resultMap="MedCategoryResult">
+        <include refid="selectMedCategoryVo"/>
+        where category_id = #{categoryId}
+    </select>
+
+    <select id="hasChildByCategoryId" parameterType="Long" resultType="Integer">
+        select count(1) from med_category where parent_id = #{categoryId}
+    </select>
+
+    <insert id="insertMedCategory" parameterType="MedCategory" useGeneratedKeys="true" keyProperty="categoryId">
+        insert into med_category
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="parentId != null">parent_id,</if>
+            <if test="ancestors != null">ancestors,</if>
+            <if test="categoryName != null and categoryName != ''">category_name,</if>
+            <if test="categoryCode != null and categoryCode != ''">category_code,</if>
+            <if test="medType != null">med_type,</if>
+            <if test="orderNum != null">order_num,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="parentId != null">#{parentId},</if>
+            <if test="ancestors != null">#{ancestors},</if>
+            <if test="categoryName != null and categoryName != ''">#{categoryName},</if>
+            <if test="categoryCode != null and categoryCode != ''">#{categoryCode},</if>
+            <if test="medType != null">#{medType},</if>
+            <if test="orderNum != null">#{orderNum},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedCategory" parameterType="MedCategory">
+        update med_category
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="parentId != null">parent_id = #{parentId},</if>
+            <if test="ancestors != null">ancestors = #{ancestors},</if>
+            <if test="categoryName != null and categoryName != ''">category_name = #{categoryName},</if>
+            <if test="categoryCode != null and categoryCode != ''">category_code = #{categoryCode},</if>
+            <if test="medType != null">med_type = #{medType},</if>
+            <if test="orderNum != null">order_num = #{orderNum},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where category_id = #{categoryId}
+    </update>
+
+    <delete id="deleteMedCategoryByCategoryId" parameterType="Long">
+        delete from med_category where category_id = #{categoryId}
+    </delete>
+
+    <delete id="deleteMedCategoryByCategoryIds" parameterType="String">
+        delete from med_category where category_id in 
+        <foreach item="categoryId" collection="array" open="(" separator="," close=")">
+            #{categoryId}
+        </foreach>
+    </delete>
+</mapper>
