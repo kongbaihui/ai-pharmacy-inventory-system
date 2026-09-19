@@ -1,105 +1,68 @@
-# ============================================================
-# 药品进销存项目 .gitignore
-# 用法：把本文件复制到仓库根目录（与 pom.xml 同级），文件名保持 .gitignore
-# 说明：本文件里的规则只对“还没被 Git 跟踪过的文件”生效。
-#      如果某个文件之前已经提交过，要先执行 git rm -r --cached 文件名 再提交一次。
-# ============================================================
-
-
-# ---------- Java 编译产物（不传，各人本地重新编译即可） ----------
-target/
-build/
-out/
+# Java / Maven build output
+**/target/
+**/out/
 *.class
 *.jar
 *.war
 *.ear
+!**/.mvn/wrapper/maven-wrapper.jar
 
-# Maven 包装器要保留，不能忽略
-!.mvn/wrapper/maven-wrapper.jar
-
-
-# ---------- IDE 与编辑器配置（每个人的都不一样，不传） ----------
-.idea/
-*.iml
-*.ipr
-*.iws
-.settings/
-.classpath
-.project
-.vscode/
-*.swp
-*.swo
-
-
-# ---------- 前端依赖与打包产物（不传，用 npm install 重新装） ----------
-node_modules/
-dist/
-dist-ssr/
-unpackage/
-.vite/
-.eslintcache
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/unpackage/
+**/.vite/
+**/.eslintcache
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# IDE and editor files
+**/.idea/
+**/.vscode/
+**/.settings/
+**/.classpath
+**/.project
+**/.factorypath
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
 
-# ---------- 配置文件（含数据库密码、Redis 密码、AI 接口密钥，不传） ----------
-# 公共配置（如 application.yml 里的端口、日志、MyBatis 设置）可以提交；
-# 下面是含账号密码的配置文件，默认不提交，各人本地自己配一份。
-# 如果组内约定“把密码改成占位符后提交模板”，就把对应那行前面加 # 注释掉。
-ruoyi-admin/src/main/resources/application-druid.yml
-application-druid.yml
-application-local.yml
-application-local.yaml
-application-*-local.yml
-application-ai.yml
-application-openai.yml
-*.env
-.env
-.env.local
+# Local-only configuration and secrets
+**/application-local.yml
+**/application-local.yaml
+**/application-*-local.yml
+**/application-*-local.yaml
+**/application-ai-local.yml
+**/application-openai-local.yml
+**/.env.local
+**/.env.*.local
 
-# 如果组内约定用占位符模板代替真实配置，请保留并提交 .example 模板文件
-!*.example
-!application-druid.yml.example
-
-
-# ---------- 运行期产生的文件（日志、临时文件、上传的附件） ----------
-logs/
+# Runtime files
+**/logs/
+**/temp/
+**/tmp/
+**/upload/
+**/uploads/
+**/profile/
 *.log
-temp/
-tmp/
-upload/
-uploads/
-profile/
-ruoyi-admin/src/main/resources/static/upload/
+*.pid
 
-
-# ---------- 数据库导出与备份（只提交建表脚本，不提交数据备份） ----------
+# Database backups and local archives
 *dump*.sql
 *backup*.sql
 *.bak
-
-
-# ---------- 压缩包与临时文档 ----------
 *.zip
 *.rar
 *.7z
 *.tmp
 
-
-# ---------- 操作系统自动生成的文件 ----------
+# Operating-system files
 .DS_Store
 Thumbs.db
 desktop.ini
 *.lnk
-
-
-# ============================================================
-# 以下内容必须提交，不要加到忽略列表里：
-#   pom.xml、各模块 src 目录、resources 下的公共配置与 mapper XML
-#   sql 目录下的建表脚本与菜单脚本
-#   ruoyi-ui 的 package.json、src 目录
-#   docs 目录下的设计文档与说明文档
-# ============================================================

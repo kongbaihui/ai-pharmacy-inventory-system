@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedStockOrderMapper">
+
+    <resultMap id="MedStockOrderResult" type="MedStockOrder">
+        <id property="orderId" column="order_id" />
+        <result property="orderNo" column="order_no" />
+        <result property="orderType" column="order_type" />
+        <result property="orderDate" column="order_date" />
+        <result property="supplierId" column="supplier_id" />
+        <result property="supplierName" column="supplier_name" />
+        <result property="department" column="department" />
+        <result property="orderStatus" column="order_status" />
+        <result property="totalQty" column="total_qty" />
+        <result property="totalAmount" column="total_amount" />
+        <result property="operator" column="operator" />
+        <result property="confirmBy" column="confirm_by" />
+        <result property="confirmTime" column="confirm_time" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <resultMap id="MedStockOrderItemResult" type="MedStockOrderItem">
+        <id property="itemId" column="item_id" />
+        <result property="orderId" column="order_id" />
+        <result property="medId" column="med_id" />
+        <result property="batchId" column="batch_id" />
+        <result property="batchNo" column="batch_no" />
+        <result property="produceDate" column="produce_date" />
+        <result property="expireDate" column="expire_date" />
+        <result property="quantity" column="quantity" />
+        <result property="unitPrice" column="unit_price" />
+        <result property="amount" column="amount" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="remainQty" column="remain_qty" />
+    </resultMap>
+
+    <resultMap id="MedStockBatchResult" type="MedStockBatch">
+        <id property="batchId" column="batch_id" />
+        <result property="medId" column="med_id" />
+        <result property="supplierId" column="supplier_id" />
+        <result property="batchNo" column="batch_no" />
+        <result property="produceDate" column="produce_date" />
+        <result property="expireDate" column="expire_date" />
+        <result property="batchQty" column="batch_qty" />
+        <result property="remainQty" column="remain_qty" />
+        <result property="purchasePrice" column="purchase_price" />
+        <result property="batchStatus" column="batch_status" />
+    </resultMap>
+
+    <sql id="selectOrderVo">
+        select o.order_id, o.order_no, o.order_type, o.order_date, o.supplier_id,
+               o.department, o.order_status, o.total_qty, o.total_amount, o.operator,
+               o.confirm_by, o.confirm_time, o.create_by, o.create_time, o.update_by,
+               o.update_time, o.remark, s.supplier_name
+        from med_stock_order o
+        left join med_supplier s on s.supplier_id = o.supplier_id
+    </sql>
+
+    <select id="selectMedStockOrderList" parameterType="MedStockOrder" resultMap="MedStockOrderResult">
+        <include refid="selectOrderVo" />
+        <where>
+            <if test="orderNo != null and orderNo != ''">and o.order_no like concat('%', #{orderNo}, '%')</if>
+            <if test="orderType != null and orderType != ''">and o.order_type = #{orderType}</if>
+            <if test="orderStatus != null and orderStatus != ''">and o.order_status = #{orderStatus}</if>
+            <if test="supplierId != null">and o.supplier_id = #{supplierId}</if>
+            <if test="department != null and department != ''">and o.department like concat('%', #{department}, '%')</if>
+            <if test="params.beginOrderDate != null and params.beginOrderDate != ''">and o.order_date &gt;= #{params.beginOrderDate}</if>
+            <if test="params.endOrderDate != null and params.endOrderDate != ''">and o.order_date &lt;= #{params.endOrderDate}</if>
+        </where>
+        order by o.order_id desc
+    </select>
+
+    <select id="selectMedStockOrderById" parameterType="Long" resultMap="MedStockOrderResult">
+        <include refid="selectOrderVo" />
+        where o.order_id = #{orderId}
+    </select>
+
+    <select id="selectMedStockOrderForUpdate" parameterType="Long" resultMap="MedStockOrderResult">
+        select order_id, order_no, order_type, order_date, supplier_id, department,
+               order_status, total_qty, total_amount, operator, confirm_by, confirm_time,
+               create_by, create_time, update_by, update_time, remark
+        from med_stock_order
+        where order_id = #{orderId}
+        for update
+    </select>
+
+    <select id="selectItemListByOrderId" parameterType="Long" resultMap="MedStockOrderItemResult">
+        select i.item_id, i.order_id, i.med_id, i.batch_id, i.batch_no, i.produce_date,
+               i.expire_date, i.quantity, i.unit_price, i.amount,
+               m.med_code, m.med_name, m.med_spec, m.unit, b.remain_qty
+        from med_stock_order_item i
+        left join med_info m on m.med_id = i.med_id
+        left join med_stock_batch b on b.batch_id = i.batch_id
+        where i.order_id = #{orderId}
+        order by i.item_id
+    </select>
+
+    <insert id="insertMedStockOrder" parameterType="MedStockOrder" useGeneratedKeys="true" keyProperty="orderId">
+        insert into med_stock_order
+        (order_no, order_type, order_date, supplier_id, department, order_status, total_qty,
+         total_amount, operator, create_by, create_time, remark)
+        values
+        (#{orderNo}, #{orderType}, #{orderDate}, #{supplierId}, #{department}, #{orderStatus},
+         #{totalQty}, #{totalAmount}, #{operator}, #{createBy}, sysdate(), #{remark})
+    </insert>
+
+    <update id="updateMedStockOrder" parameterType="MedStockOrder">
+        update med_stock_order
+        set order_date = #{orderDate}, supplier_id = #{supplierId}, department = #{department},
+            total_qty = #{totalQty}, total_amount = #{totalAmount}, operator = #{operator},
+            update_by = #{updateBy}, update_time = sysdate(), remark = #{remark}
+        where order_id = #{orderId} and order_status = '0'
+    </update>
+
+    <update id="updateOrderConfirmed" parameterType="MedStockOrder">
+        update med_stock_order
+        set order_status = '1', confirm_by = #{confirmBy}, confirm_time = #{confirmTime},
+            update_by = #{updateBy}, update_time = sysdate()
+        where order_id = #{orderId} and order_status = '0'
+    </update>
+
+    <insert id="insertMedStockOrderItem" parameterType="MedStockOrderItem" useGeneratedKeys="true" keyProperty="itemId">
+        insert into med_stock_order_item
+        (order_id, med_id, batch_id, batch_no, produce_date, expire_date, quantity, unit_price, amount)
+        values
+        (#{orderId}, #{medId}, #{batchId}, #{batchNo}, #{produceDate}, #{expireDate},
+         #{quantity}, #{unitPrice}, #{amount})
+    </insert>
+
+    <update id="updateItemBatchId">
+        update med_stock_order_item set batch_id = #{batchId} where item_id = #{itemId}
+    </update>
+
+    <delete id="deleteItemsByOrderId" parameterType="Long">
+        delete from med_stock_order_item where order_id = #{orderId}
+    </delete>
+
+    <delete id="deleteMedStockOrderById" parameterType="Long">
+        delete from med_stock_order where order_id = #{orderId} and order_status = '0'
+    </delete>
+
+    <select id="selectBatchForUpdate" parameterType="Long" resultMap="MedStockBatchResult">
+        select batch_id, med_id, supplier_id, batch_no, produce_date, expire_date,
+               batch_qty, remain_qty, purchase_price, batch_status
+        from med_stock_batch
+        where batch_id = #{batchId}
+        for update
+    </select>
+
+    <select id="selectBatchByMedAndNoForUpdate" resultMap="MedStockBatchResult">
+        select batch_id, med_id, supplier_id, batch_no, produce_date, expire_date,
+               batch_qty, remain_qty, purchase_price, batch_status
+        from med_stock_batch
+        where med_id = #{medId} and batch_no = #{batchNo}
+        order by batch_id
+        limit 1 for update
+    </select>
+
+    <update id="increaseBatchByInbound">
+        update med_stock_batch
+        set batch_qty = ifnull(batch_qty, 0) + #{quantity},
+            remain_qty = ifnull(remain_qty, 0) + #{quantity},
+            purchase_price = #{unitPrice}, in_time = sysdate(), batch_status = '0',
+            update_by = #{updateBy}, update_time = sysdate()
+        where batch_id = #{batchId}
+    </update>
+
+    <update id="decreaseBatchForOutbound">
+        update med_stock_batch
+        set remain_qty = remain_qty - #{quantity}, update_by = #{updateBy}, update_time = sysdate()
+        where batch_id = #{batchId} and remain_qty &gt;= #{quantity}
+    </update>
+
+    <update id="increaseBatchForReturn">
+        update med_stock_batch
+        set remain_qty = remain_qty + #{quantity}, update_by = #{updateBy}, update_time = sysdate()
+        where batch_id = #{batchId} and remain_qty + #{quantity} &lt;= batch_qty
+    </update>
+
+    <select id="countEnabledMed" parameterType="Long" resultType="int">
+        select count(1) from med_info where med_id = #{medId} and status = '0'
+    </select>
+
+    <select id="countEnabledSupplier" parameterType="Long" resultType="int">
+        select count(1) from med_supplier where supplier_id = #{supplierId} and status = '0'
+    </select>
+</mapper>
