@@ -5,8 +5,11 @@
 -- ----------------------------------------------------------------------------
 SET NAMES utf8mb4;
 
--- 隐藏与本项目日常业务无关的若依演示入口，系统管理保留给管理员。
+-- 保留若依的系统管理、系统监控和系统工具，仅隐藏官网外链。
 UPDATE sys_menu SET visible = '1'
+WHERE menu_name = '若依官网';
+
+UPDATE sys_menu SET visible = '0'
 WHERE menu_name IN ('系统监控', '系统工具');
 
 -- 清理上一版错误挂载的旧页面及其按钮权限（这些页面调用的后端接口不存在）。
@@ -14,17 +17,30 @@ DELETE FROM sys_menu
 WHERE parent_id IN (
     SELECT menu_id FROM (
         SELECT menu_id FROM sys_menu
-        WHERE component IN ('system/stock/index', 'system/flow/index', 'system/clean/index', 'system/AIChat/index')
+        WHERE component IN ('system/stock/index', 'system/flow/index', 'system/clean/index')
     ) old_pages
 );
 DELETE FROM sys_menu
-WHERE component IN ('system/stock/index', 'system/flow/index', 'system/clean/index', 'system/AIChat/index');
+WHERE component IN ('system/stock/index', 'system/flow/index', 'system/clean/index');
 
 SET @medRootId = (
     SELECT menu_id FROM sys_menu
     WHERE menu_name = '药品进销存管理' AND menu_type = 'M'
     ORDER BY menu_id LIMIT 1
 );
+
+-- 顶级菜单顺序：工作台由前端固定为第一项，以下菜单从第二项开始排列。
+UPDATE sys_menu SET order_num = 1, visible = '0', status = '0'
+WHERE menu_id = @medRootId;
+
+UPDATE sys_menu SET order_num = 3, visible = '0', status = '0'
+WHERE parent_id = 0 AND menu_name = '系统监控';
+
+UPDATE sys_menu SET order_num = 4, visible = '0', status = '0'
+WHERE parent_id = 0 AND menu_name = '系统管理';
+
+UPDATE sys_menu SET order_num = 5, visible = '0', status = '0'
+WHERE parent_id = 0 AND menu_name = '系统工具';
 
 -- 将黄浩负责的盘点、预警、效期、过期管理统一归入“库存监管”。
 UPDATE sys_menu
@@ -134,3 +150,19 @@ SELECT '库存流水', @businessId, 4, 'flow', 'system/stockOrder/index', '{"mod
        'admin', SYSDATE(), '', NULL, '库存变更流水查询'
 WHERE @businessId IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE parent_id = @businessId AND path = 'flow');
+
+-- 朱旭已提交的 AI 前端页面独立显示；实际问答由 /system/ai/chat 后端接口提供。
+INSERT INTO sys_menu
+    (menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon,
+     create_by, create_time, update_by, update_time, remark)
+SELECT 'AI前端界面', 0, 2, 'ai', 'system/AIChat/index', '', 'AIChat',
+       1, 0, 'C', '0', '0', '', 'guide',
+       'admin', SYSDATE(), '', NULL, '现有 AI 对话前端页面'
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE component = 'system/AIChat/index');
+
+UPDATE sys_menu
+SET menu_name = 'AI前端界面', parent_id = 0, order_num = 2, path = 'ai',
+    query = '', route_name = 'AIChat', visible = '0', status = '0', icon = 'guide',
+    remark = '现有 AI 对话前端页面'
+WHERE component = 'system/AIChat/index';
