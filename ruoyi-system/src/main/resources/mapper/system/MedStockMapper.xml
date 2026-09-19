@@ -11,8 +11,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="lockQty"    column="lock_qty"    />
         <result property="lastInTime"    column="last_in_time"    />
         <result property="lastOutTime"    column="last_out_time"    />
-        <result property="createBy"    column="create_by"    />
-        <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
         <result property="updateTime"    column="update_time"    />
         <result property="remark"    column="remark"    />
@@ -35,7 +33,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectMedStockVo">
-        select stock_id, med_id, total_qty, lock_qty, last_in_time, last_out_time, create_by, create_time, update_by, update_time, remark from med_stock
+        select stock_id, med_id, total_qty, lock_qty, last_in_time, last_out_time, update_by, update_time, remark from med_stock
     </sql>
 
     <select id="selectMedStockByMedId" parameterType="Long" resultMap="MedStockResult">
@@ -62,15 +60,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="medId != null">med_id,</if>
             <if test="totalQty != null">total_qty,</if>
             <if test="lockQty != null">lock_qty,</if>
-            <if test="createBy != null">create_by,</if>
+            <if test="updateBy != null">update_by,</if>
             <if test="remark != null">remark,</if>
-            create_time
+            update_time
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="medId != null">#{medId},</if>
             <if test="totalQty != null">#{totalQty},</if>
             <if test="lockQty != null">#{lockQty},</if>
-            <if test="createBy != null">#{createBy},</if>
+            <if test="updateBy != null">#{updateBy},</if>
             <if test="remark != null">#{remark},</if>
             sysdate()
          </trim>

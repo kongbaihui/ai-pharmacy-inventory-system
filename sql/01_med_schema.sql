@@ -85,6 +85,8 @@ create table med_info (
 -- ============================ 二、库存数据（总体设计） ============================
 
 -- 库存主表：出入库、退库、盘点、清理统一更新该表（出入库业务由库存出入库模块写入，盘点与清理提供原子更新语句）
+-- 注意：本表只保留 update_by、update_time 两个审计字段，没有 create_by、create_time，
+--       Mapper 与业务代码中不要引用 create_by、create_time，否则会报字段不存在。
 drop table if exists med_stock;
 create table med_stock (
   stock_id        bigint(20)      not null auto_increment    comment '库存ID',

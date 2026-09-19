@@ -96,7 +96,8 @@ public class MedStockServiceImpl implements IMedStockService
             stock.setMedId(medId);
             stock.setTotalQty(0L);
             stock.setLockQty(0L);
-            stock.setCreateBy(SecurityUtils.getUsername());
+            // med_stock 表以 update_by、update_time 作为唯一的审计字段，首次建档同样记录在这里
+            stock.setUpdateBy(SecurityUtils.getUsername());
             medStockMapper.insertMedStock(stock);
         }
         long beforeQty = stock.getTotalQty() == null ? 0L : stock.getTotalQty();
