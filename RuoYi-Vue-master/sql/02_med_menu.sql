@@ -26,7 +26,7 @@ insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame
 -- 药品信息菜单
 SET @menuId = (SELECT IFNULL(MAX(menu_id), 0) + 1 FROM sys_menu);
 insert into sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
-values(@menuId, '药品信息', @baseId, 2, 'info', 'system/info/index', '', '', 1, 0, 'C', '0', '0', 'system:info:list', 'medicine-box', 'admin', sysdate(), '', null, '药品信息菜单');
+values(@menuId, '药品信息', @baseId, 2, 'info', 'system/info/index', '', '', 1, 0, 'C', '0', '0', 'system:info:list', 'clipboard', 'admin', sysdate(), '', null, '药品信息菜单');
 insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark) values('药品信息查询', @menuId, 1, '#', '', 1, 0, 'F', '0', '0', 'system:info:query',  '#', 'admin', sysdate(), '', null, '');
 insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark) values('药品信息新增', @menuId, 2, '#', '', 1, 0, 'F', '0', '0', 'system:info:add',    '#', 'admin', sysdate(), '', null, '');
 insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark) values('药品信息修改', @menuId, 3, '#', '', 1, 0, 'F', '0', '0', 'system:info:edit',   '#', 'admin', sysdate(), '', null, '');

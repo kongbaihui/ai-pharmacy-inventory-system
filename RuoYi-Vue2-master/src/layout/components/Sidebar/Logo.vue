@@ -14,7 +14,7 @@
 </template>
 
 <script>
-import logoImg from '@/assets/logo/logo.png'
+import logoImg from '@/assets/logo/pharmacy-logo.png'
 import variables from '@/assets/styles/variables.scss'
 
 export default {
@@ -38,7 +38,7 @@ export default {
   },
   data() {
     return {
-      title: process.env.VUE_APP_TITLE,
+      title: '医院药品进销存',
       logo: logoImg
     }
   }
