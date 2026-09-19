@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedExpiredCleanMapper">
+    
+    <resultMap type="MedExpiredClean" id="MedExpiredCleanResult">
+        <result property="cleanId"    column="clean_id"    />
+        <result property="cleanNo"    column="clean_no"    />
+        <result property="medId"    column="med_id"    />
+        <result property="batchId"    column="batch_id"    />
+        <result property="batchNo"    column="batch_no"    />
+        <result property="expireDate"    column="expire_date"    />
+        <result property="cleanQty"    column="clean_qty"    />
+        <result property="cleanType"    column="clean_type"    />
+        <result property="cleanReason"    column="clean_reason"    />
+        <result property="cleanStatus"    column="clean_status"    />
+        <result property="cleanUser"    column="clean_user"    />
+        <result property="cleanTime"    column="clean_time"    />
+        <result property="auditBy"    column="audit_by"    />
+        <result property="auditTime"    column="audit_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+        <result property="medCode"    column="med_code"    />
+        <result property="medName"    column="med_name"    />
+        <result property="medSpec"    column="med_spec"    />
+        <result property="unit"    column="unit"    />
+        <result property="remainQty"    column="remain_qty"    />
+    </resultMap>
+
+    <sql id="selectMedExpiredCleanVo">
+        select c.clean_id, c.clean_no, c.med_id, c.batch_id, c.batch_no, c.expire_date, c.clean_qty, c.clean_type, c.clean_reason, c.clean_status, c.clean_user, c.clean_time, c.audit_by, c.audit_time, c.create_by, c.create_time, c.update_by, c.update_time, c.remark,
+               m.med_code, m.med_name, m.med_spec, m.unit, b.remain_qty
+        from med_expired_clean c
+        left join med_info m on m.med_id = c.med_id
+        left join med_stock_batch b on b.batch_id = c.batch_id
+    </sql>
+
+    <select id="selectMedExpiredCleanList" parameterType="MedExpiredClean" resultMap="MedExpiredCleanResult">
+        <include refid="selectMedExpiredCleanVo"/>
+        <where>  
+            <if test="cleanNo != null  and cleanNo != ''"> and c.clean_no like concat('%', #{cleanNo}, '%')</if>
+            <if test="medId != null "> and c.med_id = #{medId}</if>
+            <if test="batchId != null "> and c.batch_id = #{batchId}</if>
+            <if test="batchNo != null  and batchNo != ''"> and c.batch_no = #{batchNo}</if>
+            <if test="cleanType != null  and cleanType != ''"> and c.clean_type = #{cleanType}</if>
+            <if test="cleanStatus != null  and cleanStatus != ''"> and c.clean_status = #{cleanStatus}</if>
+            <if test="medName != null  and medName != ''"> and m.med_name like concat('%', #{medName}, '%')</if>
+            <if test="categoryId != null "> and m.category_id = #{categoryId}</if>
+            <if test="params.beginCleanTime != null and params.beginCleanTime != ''"> and c.clean_time &gt;= #{params.beginCleanTime}</if>
+            <if test="params.endCleanTime != null and params.endCleanTime != ''"> and c.clean_time &lt;= #{params.endCleanTime}</if>
+        </where>
+        order by c.clean_id desc
+    </select>
+    
+    <select id="selectMedExpiredCleanByCleanId" parameterType="Long" resultMap="MedExpiredCleanResult">
+        <include refid="selectMedExpiredCleanVo"/>
+        where c.clean_id = #{cleanId}
+    </select>
+
+    <select id="selectMaxCleanNo" parameterType="String" resultType="String">
+        select max(clean_no) from med_expired_clean where clean_no like concat(#{prefix}, '%')
+    </select>
+
+    <insert id="insertMedExpiredClean" parameterType="MedExpiredClean" useGeneratedKeys="true" keyProperty="cleanId">
+        insert into med_expired_clean
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="cleanNo != null and cleanNo != ''">clean_no,</if>
+            <if test="medId != null">med_id,</if>
+            <if test="batchId != null">batch_id,</if>
+            <if test="batchNo != null">batch_no,</if>
+            <if test="expireDate != null">expire_date,</if>
+            <if test="cleanQty != null">clean_qty,</if>
+            <if test="cleanType != null">clean_type,</if>
+            <if test="cleanReason != null">clean_reason,</if>
+            <if test="cleanStatus != null">clean_status,</if>
+            <if test="cleanUser != null">clean_user,</if>
+            <if test="cleanTime != null">clean_time,</if>
+            <if test="auditBy != null">audit_by,</if>
+            <if test="auditTime != null">audit_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="cleanNo != null and cleanNo != ''">#{cleanNo},</if>
+            <if test="medId != null">#{medId},</if>
+            <if test="batchId != null">#{batchId},</if>
+            <if test="batchNo != null">#{batchNo},</if>
+            <if test="expireDate != null">#{expireDate},</if>
+            <if test="cleanQty != null">#{cleanQty},</if>
+            <if test="cleanType != null">#{cleanType},</if>
+            <if test="cleanReason != null">#{cleanReason},</if>
+            <if test="cleanStatus != null">#{cleanStatus},</if>
+            <if test="cleanUser != null">#{cleanUser},</if>
+            <if test="cleanTime != null">#{cleanTime},</if>
+            <if test="auditBy != null">#{auditBy},</if>
+            <if test="auditTime != null">#{auditTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedExpiredClean" parameterType="MedExpiredClean">
+        update med_expired_clean
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="cleanNo != null and cleanNo != ''">clean_no = #{cleanNo},</if>
+            <if test="medId != null">med_id = #{medId},</if>
+            <if test="batchId != null">batch_id = #{batchId},</if>
+            <if test="batchNo != null">batch_no = #{batchNo},</if>
+            <if test="expireDate != null">expire_date = #{expireDate},</if>
+            <if test="cleanQty != null">clean_qty = #{cleanQty},</if>
+            <if test="cleanType != null">clean_type = #{cleanType},</if>
+            <if test="cleanReason != null">clean_reason = #{cleanReason},</if>
+            <if test="cleanStatus != null">clean_status = #{cleanStatus},</if>
+            <if test="cleanUser != null">clean_user = #{cleanUser},</if>
+            <if test="cleanTime != null">clean_time = #{cleanTime},</if>
+            <if test="auditBy != null">audit_by = #{auditBy},</if>
+            <if test="auditTime != null">audit_time = #{auditTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where clean_id = #{cleanId}
+    </update>
+
+    <delete id="deleteMedExpiredCleanByCleanId" parameterType="Long">
+        delete from med_expired_clean where clean_id = #{cleanId}
+    </delete>
+
+    <delete id="deleteMedExpiredCleanByCleanIds" parameterType="String">
+        delete from med_expired_clean where clean_id in 
+        <foreach item="cleanId" collection="array" open="(" separator="," close=")">
+            #{cleanId}
+        </foreach>
+    </delete>
+</mapper>

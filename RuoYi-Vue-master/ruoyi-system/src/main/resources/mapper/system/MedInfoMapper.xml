@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedInfoMapper">
+    
+    <resultMap type="MedInfo" id="MedInfoResult">
+        <result property="medId"    column="med_id"    />
+        <result property="medCode"    column="med_code"    />
+        <result property="medName"    column="med_name"    />
+        <result property="tradeName"    column="trade_name"    />
+        <result property="categoryId"    column="category_id"    />
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="medSpec"    column="med_spec"    />
+        <result property="dosageForm"    column="dosage_form"    />
+        <result property="unit"    column="unit"    />
+        <result property="manufacturer"    column="manufacturer"    />
+        <result property="approvalNo"    column="approval_no"    />
+        <result property="storageCond"    column="storage_cond"    />
+        <result property="purchasePrice"    column="purchase_price"    />
+        <result property="salePrice"    column="sale_price"    />
+        <result property="stockMin"    column="stock_min"    />
+        <result property="stockMax"    column="stock_max"    />
+        <result property="warnDays"    column="warn_days"    />
+        <result property="status"    column="status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+        <result property="categoryName"    column="category_name"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="stockQty"    column="stock_qty"    />
+    </resultMap>
+
+    <sql id="selectMedInfoVo">
+        select m.med_id, m.med_code, m.med_name, m.trade_name, m.category_id, m.supplier_id, m.med_spec, m.dosage_form, m.unit, m.manufacturer, m.approval_no, m.storage_cond, m.purchase_price, m.sale_price, m.stock_min, m.stock_max, m.warn_days, m.status, m.create_by, m.create_time, m.update_by, m.update_time, m.remark,
+               c.category_name, s.supplier_name, ifnull(st.total_qty, 0) as stock_qty
+        from med_info m
+        left join med_category c on c.category_id = m.category_id
+        left join med_supplier s on s.supplier_id = m.supplier_id
+        left join med_stock st on st.med_id = m.med_id
+    </sql>
+
+    <select id="selectMedInfoList" parameterType="MedInfo" resultMap="MedInfoResult">
+        <include refid="selectMedInfoVo"/>
+        <where>  
+            <if test="medCode != null  and medCode != ''"> and m.med_code like concat('%', #{medCode}, '%')</if>
+            <if test="medName != null  and medName != ''"> and m.med_name like concat('%', #{medName}, '%')</if>
+            <if test="tradeName != null  and tradeName != ''"> and m.trade_name like concat('%', #{tradeName}, '%')</if>
+            <if test="categoryId != null "> and m.category_id = #{categoryId}</if>
+            <if test="supplierId != null "> and m.supplier_id = #{supplierId}</if>
+            <if test="dosageForm != null  and dosageForm != ''"> and m.dosage_form = #{dosageForm}</if>
+            <if test="manufacturer != null  and manufacturer != ''"> and m.manufacturer like concat('%', #{manufacturer}, '%')</if>
+            <if test="storageCond != null  and storageCond != ''"> and m.storage_cond = #{storageCond}</if>
+            <if test="status != null  and status != ''"> and m.status = #{status}</if>
+        </where>
+        order by m.med_id desc
+    </select>
+    
+    <select id="selectMedInfoByMedId" parameterType="Long" resultMap="MedInfoResult">
+        <include refid="selectMedInfoVo"/>
+        where m.med_id = #{medId}
+    </select>
+
+    <select id="countMedByCategoryId" parameterType="Long" resultType="Integer">
+        select count(1) from med_info where category_id = #{categoryId}
+    </select>
+
+    <select id="countMedBySupplierId" parameterType="Long" resultType="Integer">
+        select count(1) from med_info where supplier_id = #{supplierId}
+    </select>
+
+    <select id="checkMedCodeUnique" parameterType="String" resultMap="MedInfoResult">
+        select med_id, med_code, med_name from med_info where med_code = #{medCode} limit 1
+    </select>
+
+    <insert id="insertMedInfo" parameterType="MedInfo" useGeneratedKeys="true" keyProperty="medId">
+        insert into med_info
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="medCode != null and medCode != ''">med_code,</if>
+            <if test="medName != null and medName != ''">med_name,</if>
+            <if test="tradeName != null">trade_name,</if>
+            <if test="categoryId != null">category_id,</if>
+            <if test="supplierId != null">supplier_id,</if>
+            <if test="medSpec != null">med_spec,</if>
+            <if test="dosageForm != null">dosage_form,</if>
+            <if test="unit != null">unit,</if>
+            <if test="manufacturer != null">manufacturer,</if>
+            <if test="approvalNo != null">approval_no,</if>
+            <if test="storageCond != null">storage_cond,</if>
+            <if test="purchasePrice != null">purchase_price,</if>
+            <if test="salePrice != null">sale_price,</if>
+            <if test="stockMin != null">stock_min,</if>
+            <if test="stockMax != null">stock_max,</if>
+            <if test="warnDays != null">warn_days,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="medCode != null and medCode != ''">#{medCode},</if>
+            <if test="medName != null and medName != ''">#{medName},</if>
+            <if test="tradeName != null">#{tradeName},</if>
+            <if test="categoryId != null">#{categoryId},</if>
+            <if test="supplierId != null">#{supplierId},</if>
+            <if test="medSpec != null">#{medSpec},</if>
+            <if test="dosageForm != null">#{dosageForm},</if>
+            <if test="unit != null">#{unit},</if>
+            <if test="manufacturer != null">#{manufacturer},</if>
+            <if test="approvalNo != null">#{approvalNo},</if>
+            <if test="storageCond != null">#{storageCond},</if>
+            <if test="purchasePrice != null">#{purchasePrice},</if>
+            <if test="salePrice != null">#{salePrice},</if>
+            <if test="stockMin != null">#{stockMin},</if>
+            <if test="stockMax != null">#{stockMax},</if>
+            <if test="warnDays != null">#{warnDays},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedInfo" parameterType="MedInfo">
+        update med_info
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="medCode != null and medCode != ''">med_code = #{medCode},</if>
+            <if test="medName != null and medName != ''">med_name = #{medName},</if>
+            <if test="tradeName != null">trade_name = #{tradeName},</if>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="supplierId != null">supplier_id = #{supplierId},</if>
+            <if test="medSpec != null">med_spec = #{medSpec},</if>
+            <if test="dosageForm != null">dosage_form = #{dosageForm},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="manufacturer != null">manufacturer = #{manufacturer},</if>
+            <if test="approvalNo != null">approval_no = #{approvalNo},</if>
+            <if test="storageCond != null">storage_cond = #{storageCond},</if>
+            <if test="purchasePrice != null">purchase_price = #{purchasePrice},</if>
+            <if test="salePrice != null">sale_price = #{salePrice},</if>
+            <if test="stockMin != null">stock_min = #{stockMin},</if>
+            <if test="stockMax != null">stock_max = #{stockMax},</if>
+            <if test="warnDays != null">warn_days = #{warnDays},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where med_id = #{medId}
+    </update>
+
+    <delete id="deleteMedInfoByMedId" parameterType="Long">
+        delete from med_info where med_id = #{medId}
+    </delete>
+
+    <delete id="deleteMedInfoByMedIds" parameterType="String">
+        delete from med_info where med_id in 
+        <foreach item="medId" collection="array" open="(" separator="," close=")">
+            #{medId}
+        </foreach>
+    </delete>
+</mapper>

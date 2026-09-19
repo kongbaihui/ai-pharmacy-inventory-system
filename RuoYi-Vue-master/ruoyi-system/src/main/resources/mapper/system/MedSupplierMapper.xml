@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedSupplierMapper">
+    
+    <resultMap type="MedSupplier" id="MedSupplierResult">
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="supplierCode"    column="supplier_code"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="contactPerson"    column="contact_person"    />
+        <result property="contactPhone"    column="contact_phone"    />
+        <result property="address"    column="address"    />
+        <result property="licenseNo"    column="license_no"    />
+        <result property="licenseDate"    column="license_date"    />
+        <result property="gspStatus"    column="gsp_status"    />
+        <result property="creditLevel"    column="credit_level"    />
+        <result property="coopStatus"    column="coop_status"    />
+        <result property="status"    column="status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectMedSupplierVo">
+        select supplier_id, supplier_code, supplier_name, contact_person, contact_phone, address, license_no, license_date, gsp_status, credit_level, coop_status, status, create_by, create_time, update_by, update_time, remark from med_supplier
+    </sql>
+
+    <select id="selectMedSupplierList" parameterType="MedSupplier" resultMap="MedSupplierResult">
+        <include refid="selectMedSupplierVo"/>
+        <where>  
+            <if test="supplierCode != null  and supplierCode != ''"> and supplier_code like concat('%', #{supplierCode}, '%')</if>
+            <if test="supplierName != null  and supplierName != ''"> and supplier_name like concat('%', #{supplierName}, '%')</if>
+            <if test="contactPerson != null  and contactPerson != ''"> and contact_person like concat('%', #{contactPerson}, '%')</if>
+            <if test="contactPhone != null  and contactPhone != ''"> and contact_phone = #{contactPhone}</if>
+            <if test="licenseNo != null  and licenseNo != ''"> and license_no = #{licenseNo}</if>
+            <if test="licenseDate != null "> and license_date = #{licenseDate}</if>
+            <if test="gspStatus != null  and gspStatus != ''"> and gsp_status = #{gspStatus}</if>
+            <if test="creditLevel != null  and creditLevel != ''"> and credit_level = #{creditLevel}</if>
+            <if test="coopStatus != null  and coopStatus != ''"> and coop_status = #{coopStatus}</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+        </where>
+        order by supplier_id desc
+    </select>
+    
+    <select id="selectMedSupplierBySupplierId" parameterType="Long" resultMap="MedSupplierResult">
+        <include refid="selectMedSupplierVo"/>
+        where supplier_id = #{supplierId}
+    </select>
+
+    <select id="checkSupplierCodeUnique" parameterType="String" resultMap="MedSupplierResult">
+        <include refid="selectMedSupplierVo"/>
+        where supplier_code = #{supplierCode} limit 1
+    </select>
+
+    <insert id="insertMedSupplier" parameterType="MedSupplier" useGeneratedKeys="true" keyProperty="supplierId">
+        insert into med_supplier
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="supplierCode != null and supplierCode != ''">supplier_code,</if>
+            <if test="supplierName != null and supplierName != ''">supplier_name,</if>
+            <if test="contactPerson != null">contact_person,</if>
+            <if test="contactPhone != null">contact_phone,</if>
+            <if test="address != null">address,</if>
+            <if test="licenseNo != null">license_no,</if>
+            <if test="licenseDate != null">license_date,</if>
+            <if test="gspStatus != null">gsp_status,</if>
+            <if test="creditLevel != null">credit_level,</if>
+            <if test="coopStatus != null">coop_status,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="supplierCode != null and supplierCode != ''">#{supplierCode},</if>
+            <if test="supplierName != null and supplierName != ''">#{supplierName},</if>
+            <if test="contactPerson != null">#{contactPerson},</if>
+            <if test="contactPhone != null">#{contactPhone},</if>
+            <if test="address != null">#{address},</if>
+            <if test="licenseNo != null">#{licenseNo},</if>
+            <if test="licenseDate != null">#{licenseDate},</if>
+            <if test="gspStatus != null">#{gspStatus},</if>
+            <if test="creditLevel != null">#{creditLevel},</if>
+            <if test="coopStatus != null">#{coopStatus},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedSupplier" parameterType="MedSupplier">
+        update med_supplier
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="supplierCode != null and supplierCode != ''">supplier_code = #{supplierCode},</if>
+            <if test="supplierName != null and supplierName != ''">supplier_name = #{supplierName},</if>
+            <if test="contactPerson != null">contact_person = #{contactPerson},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="licenseNo != null">license_no = #{licenseNo},</if>
+            <if test="licenseDate != null">license_date = #{licenseDate},</if>
+            <if test="gspStatus != null">gsp_status = #{gspStatus},</if>
+            <if test="creditLevel != null">credit_level = #{creditLevel},</if>
+            <if test="coopStatus != null">coop_status = #{coopStatus},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where supplier_id = #{supplierId}
+    </update>
+
+    <delete id="deleteMedSupplierBySupplierId" parameterType="Long">
+        delete from med_supplier where supplier_id = #{supplierId}
+    </delete>
+
+    <delete id="deleteMedSupplierBySupplierIds" parameterType="String">
+        delete from med_supplier where supplier_id in 
+        <foreach item="supplierId" collection="array" open="(" separator="," close=")">
+            #{supplierId}
+        </foreach>
+    </delete>
+</mapper>

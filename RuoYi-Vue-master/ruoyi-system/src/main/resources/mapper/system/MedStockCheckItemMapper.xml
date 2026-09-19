@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedStockCheckItemMapper">
+    
+    <resultMap type="MedStockCheckItem" id="MedStockCheckItemResult">
+        <result property="itemId"    column="item_id"    />
+        <result property="checkId"    column="check_id"    />
+        <result property="medId"    column="med_id"    />
+        <result property="batchId"    column="batch_id"    />
+        <result property="batchNo"    column="batch_no"    />
+        <result property="bookQty"    column="book_qty"    />
+        <result property="realQty"    column="real_qty"    />
+        <result property="diffQty"    column="diff_qty"    />
+        <result property="diffType"    column="diff_type"    />
+        <result property="diffReason"    column="diff_reason"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="remark"    column="remark"    />
+        <result property="medName"    column="med_name"    />
+        <result property="medSpec"    column="med_spec"    />
+        <result property="unit"    column="unit"    />
+    </resultMap>
+
+    <sql id="selectMedStockCheckItemVo">
+        select i.item_id, i.check_id, i.med_id, i.batch_id, i.batch_no, i.book_qty, i.real_qty, i.diff_qty, i.diff_type, i.diff_reason, i.create_time, i.remark,
+               m.med_name, m.med_spec, m.unit
+        from med_stock_check_item i
+        left join med_info m on m.med_id = i.med_id
+    </sql>
+
+    <select id="selectMedStockCheckItemList" parameterType="MedStockCheckItem" resultMap="MedStockCheckItemResult">
+        <include refid="selectMedStockCheckItemVo"/>
+        <where>  
+            <if test="checkId != null "> and i.check_id = #{checkId}</if>
+            <if test="medId != null "> and i.med_id = #{medId}</if>
+            <if test="batchId != null "> and i.batch_id = #{batchId}</if>
+            <if test="batchNo != null  and batchNo != ''"> and i.batch_no = #{batchNo}</if>
+            <if test="diffType != null  and diffType != ''"> and i.diff_type = #{diffType}</if>
+        </where>
+        order by i.item_id
+    </select>
+
+    <select id="selectBookStockItemList" parameterType="MedStockCheck" resultMap="MedStockCheckItemResult">
+        select b.batch_id, b.med_id, b.batch_no, b.remain_qty as book_qty, 0 as real_qty, 0 as diff_qty, '0' as diff_type,
+               m.med_name, m.med_spec, m.unit
+        from med_stock_batch b
+        left join med_info m on m.med_id = b.med_id
+        <where>
+            and b.batch_status != '3'
+            <if test="medId != null "> and b.med_id = #{medId}</if>
+            <if test="categoryId != null "> and m.category_id = #{categoryId}</if>
+        </where>
+        order by b.med_id, b.expire_date
+    </select>
+    
+    <select id="selectMedStockCheckItemByItemId" parameterType="Long" resultMap="MedStockCheckItemResult">
+        <include refid="selectMedStockCheckItemVo"/>
+        where i.item_id = #{itemId}
+    </select>
+
+    <insert id="insertMedStockCheckItem" parameterType="MedStockCheckItem" useGeneratedKeys="true" keyProperty="itemId">
+        insert into med_stock_check_item
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="checkId != null">check_id,</if>
+            <if test="medId != null">med_id,</if>
+            <if test="batchId != null">batch_id,</if>
+            <if test="batchNo != null">batch_no,</if>
+            <if test="bookQty != null">book_qty,</if>
+            <if test="realQty != null">real_qty,</if>
+            <if test="diffQty != null">diff_qty,</if>
+            <if test="diffType != null">diff_type,</if>
+            <if test="diffReason != null">diff_reason,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="checkId != null">#{checkId},</if>
+            <if test="medId != null">#{medId},</if>
+            <if test="batchId != null">#{batchId},</if>
+            <if test="batchNo != null">#{batchNo},</if>
+            <if test="bookQty != null">#{bookQty},</if>
+            <if test="realQty != null">#{realQty},</if>
+            <if test="diffQty != null">#{diffQty},</if>
+            <if test="diffType != null">#{diffType},</if>
+            <if test="diffReason != null">#{diffReason},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedStockCheckItem" parameterType="MedStockCheckItem">
+        update med_stock_check_item
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="checkId != null">check_id = #{checkId},</if>
+            <if test="medId != null">med_id = #{medId},</if>
+            <if test="batchId != null">batch_id = #{batchId},</if>
+            <if test="batchNo != null">batch_no = #{batchNo},</if>
+            <if test="bookQty != null">book_qty = #{bookQty},</if>
+            <if test="realQty != null">real_qty = #{realQty},</if>
+            <if test="diffQty != null">diff_qty = #{diffQty},</if>
+            <if test="diffType != null">diff_type = #{diffType},</if>
+            <if test="diffReason != null">diff_reason = #{diffReason},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where item_id = #{itemId}
+    </update>
+
+    <delete id="deleteMedStockCheckItemByItemId" parameterType="Long">
+        delete from med_stock_check_item where item_id = #{itemId}
+    </delete>
+
+    <delete id="deleteMedStockCheckItemByItemIds" parameterType="String">
+        delete from med_stock_check_item where item_id in 
+        <foreach item="itemId" collection="array" open="(" separator="," close=")">
+            #{itemId}
+        </foreach>
+    </delete>
+</mapper>

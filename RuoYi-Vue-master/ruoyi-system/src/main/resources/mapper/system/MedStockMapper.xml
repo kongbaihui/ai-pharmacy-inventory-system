@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.MedStockMapper">
+    
+    <resultMap type="MedStock" id="MedStockResult">
+        <result property="stockId"    column="stock_id"    />
+        <result property="medId"    column="med_id"    />
+        <result property="totalQty"    column="total_qty"    />
+        <result property="lockQty"    column="lock_qty"    />
+        <result property="lastInTime"    column="last_in_time"    />
+        <result property="lastOutTime"    column="last_out_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <resultMap type="MedStockFlow" id="MedStockFlowResult">
+        <result property="flowId"    column="flow_id"    />
+        <result property="medId"    column="med_id"    />
+        <result property="batchId"    column="batch_id"    />
+        <result property="flowType"    column="flow_type"    />
+        <result property="changeQty"    column="change_qty"    />
+        <result property="beforeQty"    column="before_qty"    />
+        <result property="afterQty"    column="after_qty"    />
+        <result property="bizNo"    column="biz_no"    />
+        <result property="bizId"    column="biz_id"    />
+        <result property="operator"    column="operator"    />
+        <result property="flowTime"    column="flow_time"    />
+        <result property="remark"    column="remark"    />
+        <result property="medName"    column="med_name"    />
+    </resultMap>
+
+    <sql id="selectMedStockVo">
+        select stock_id, med_id, total_qty, lock_qty, last_in_time, last_out_time, update_by, update_time, remark from med_stock
+    </sql>
+
+    <select id="selectMedStockByMedId" parameterType="Long" resultMap="MedStockResult">
+        <include refid="selectMedStockVo"/>
+        where med_id = #{medId}
+    </select>
+
+    <select id="selectMedStockByMedIdForUpdate" parameterType="Long" resultMap="MedStockResult">
+        <include refid="selectMedStockVo"/>
+        where med_id = #{medId} for update
+    </select>
+
+    <select id="selectMedStockList" parameterType="MedStock" resultMap="MedStockResult">
+        <include refid="selectMedStockVo"/>
+        <where>
+            <if test="medId != null "> and med_id = #{medId}</if>
+        </where>
+        order by med_id
+    </select>
+
+    <insert id="insertMedStock" parameterType="MedStock" useGeneratedKeys="true" keyProperty="stockId">
+        insert into med_stock
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="medId != null">med_id,</if>
+            <if test="totalQty != null">total_qty,</if>
+            <if test="lockQty != null">lock_qty,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="remark != null">remark,</if>
+            update_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="medId != null">#{medId},</if>
+            <if test="totalQty != null">#{totalQty},</if>
+            <if test="lockQty != null">#{lockQty},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateMedStockQty" parameterType="MedStock">
+        update med_stock
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="totalQty != null">total_qty = #{totalQty},</if>
+            <if test="lockQty != null">lock_qty = #{lockQty},</if>
+            <if test="lastInTime != null">last_in_time = #{lastInTime},</if>
+            <if test="lastOutTime != null">last_out_time = #{lastOutTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where med_id = #{medId}
+    </update>
+
+    <insert id="insertMedStockFlow" parameterType="MedStockFlow" useGeneratedKeys="true" keyProperty="flowId">
+        insert into med_stock_flow
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            med_id,
+            <if test="batchId != null">batch_id,</if>
+            flow_type,
+            change_qty,
+            before_qty,
+            after_qty,
+            <if test="bizNo != null">biz_no,</if>
+            <if test="bizId != null">biz_id,</if>
+            <if test="operator != null">operator,</if>
+            <if test="remark != null">remark,</if>
+            flow_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            #{medId},
+            <if test="batchId != null">#{batchId},</if>
+            #{flowType},
+            #{changeQty},
+            #{beforeQty},
+            #{afterQty},
+            <if test="bizNo != null">#{bizNo},</if>
+            <if test="bizId != null">#{bizId},</if>
+            <if test="operator != null">#{operator},</if>
+            <if test="remark != null">#{remark},</if>
+            <choose><when test="flowTime != null">#{flowTime}</when><otherwise>sysdate()</otherwise></choose>
+         </trim>
+    </insert>
+
+    <select id="selectMedStockFlowList" parameterType="MedStockFlow" resultMap="MedStockFlowResult">
+        select f.flow_id, f.med_id, f.batch_id, f.flow_type, f.change_qty, f.before_qty, f.after_qty, f.biz_no, f.biz_id, f.operator, f.flow_time, f.remark, m.med_name
+        from med_stock_flow f
+        left join med_info m on m.med_id = f.med_id
+        <where>
+            <if test="medId != null "> and f.med_id = #{medId}</if>
+            <if test="flowType != null  and flowType != ''"> and f.flow_type = #{flowType}</if>
+            <if test="bizNo != null  and bizNo != ''"> and f.biz_no like concat('%', #{bizNo}, '%')</if>
+            <if test="params.beginFlowTime != null and params.beginFlowTime != ''"> and f.flow_time &gt;= #{params.beginFlowTime}</if>
+            <if test="params.endFlowTime != null and params.endFlowTime != ''"> and f.flow_time &lt;= #{params.endFlowTime}</if>
+        </where>
+        order by f.flow_id desc
+    </select>
+</mapper>

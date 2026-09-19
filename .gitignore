@@ -1,0 +1,68 @@
+# Java / Maven build output
+**/target/
+**/out/
+*.class
+*.jar
+*.war
+*.ear
+!**/.mvn/wrapper/maven-wrapper.jar
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/unpackage/
+**/.vite/
+**/.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE and editor files
+**/.idea/
+**/.vscode/
+**/.settings/
+**/.classpath
+**/.project
+**/.factorypath
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# Local-only configuration and secrets
+**/application-local.yml
+**/application-local.yaml
+**/application-*-local.yml
+**/application-*-local.yaml
+**/application-ai-local.yml
+**/application-openai-local.yml
+**/.env.local
+**/.env.*.local
+
+# Runtime files
+**/logs/
+**/temp/
+**/tmp/
+**/upload/
+**/uploads/
+**/profile/
+*.log
+*.pid
+
+# Database backups and local archives
+*dump*.sql
+*backup*.sql
+*.bak
+*.zip
+*.rar
+*.7z
+*.tmp
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
