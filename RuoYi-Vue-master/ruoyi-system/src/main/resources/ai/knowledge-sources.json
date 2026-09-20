@@ -1,0 +1,146 @@
+[
+  {
+    "id": "cn-drug-administration-law",
+    "title": "中华人民共和国药品管理法",
+    "authority": "全国人民代表大会常务委员会 / 国家市场监督管理总局法规数据库",
+    "url": "https://sjfg.samr.gov.cn/law/file/origin/3235243/1663324380197.pdf",
+    "language": "zh-CN",
+    "category": "法律法规"
+  },
+  {
+    "id": "cn-drug-operation-use-quality",
+    "title": "药品经营和使用质量监督管理办法",
+    "authority": "国家市场监督管理总局",
+    "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/fgs/art/2023/art_db526cfcd7204874b8b23297fa3b02dc.html",
+    "language": "zh-CN",
+    "category": "质量管理"
+  },
+  {
+    "id": "cn-good-supply-practice",
+    "title": "药品经营质量管理规范",
+    "authority": "国家市场监督管理总局",
+    "url": "https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_bc07ffdb7a1c4e46be371ac5a4a65f9c.html",
+    "language": "zh-CN",
+    "category": "质量管理"
+  },
+  {
+    "id": "cn-prescription-management",
+    "title": "处方管理办法",
+    "authority": "原卫生部 / 浙江省政府网站",
+    "url": "https://zjjcmspublic.oss-cn-hangzhou-zwynet-d01-a.internet.cloud.zj.gov.cn/jcms_files/jcms1/web3171/site/attach/0/8e2a1736e6c14f02af6c6045d148944f.pdf",
+    "language": "zh-CN",
+    "category": "合理用药"
+  },
+  {
+    "id": "cn-medical-pharmacy-management",
+    "title": "医疗机构药事管理规定",
+    "authority": "国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/cmsresources/mohbgt/cmsrsdocument/doc11709.pdf",
+    "language": "zh-CN",
+    "category": "药事管理"
+  },
+  {
+    "id": "cn-antimicrobial-management",
+    "title": "抗菌药物临床应用管理办法",
+    "authority": "国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/wjw/c100221/202201/413f7b67607949dfa9e3d881313bea5d/files/%E6%8A%97%E8%8F%8C%E8%8D%AF%E7%89%A9%E4%B8%B4%E5%BA%8A%E5%BA%94%E7%94%A8%E7%AE%A1%E7%90%86%E5%8A%9E%E6%B3%95.pdf",
+    "language": "zh-CN",
+    "category": "合理用药"
+  },
+  {
+    "id": "cn-antimicrobial-guideline-2015",
+    "title": "抗菌药物临床应用指导原则（2015年版）",
+    "authority": "国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/ewebeditor/uploadfile/2015/09/20150928170007470.pdf",
+    "language": "zh-CN",
+    "category": "合理用药"
+  },
+  {
+    "id": "cn-essential-medicines-2018",
+    "title": "国家基本药物目录（2018年版）",
+    "authority": "国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/ewebeditor/uploadfile/2018/10/20181025183346942.pdf",
+    "language": "zh-CN",
+    "category": "基本药物"
+  },
+  {
+    "id": "cn-drug-label-rules",
+    "title": "Provisions for Drug Insert Sheets and Labels",
+    "authority": "National Medical Products Administration",
+    "url": "https://english.nmpa.gov.cn/2019-07/25/c_390614.htm",
+    "language": "en",
+    "category": "说明书与标签"
+  },
+  {
+    "id": "cn-drug-recall-2022",
+    "title": "药品召回管理办法（2022年）",
+    "authority": "中国政府网 / 国家药品监督管理局",
+    "url": "https://www.gov.cn/gongbao/content/2022/content_5734817.htm",
+    "language": "zh-CN",
+    "category": "召回管理"
+  },
+  {
+    "id": "who-storage-distribution-2020",
+    "title": "Good storage and distribution practices for medical products",
+    "authority": "World Health Organization",
+    "url": "https://cdn.who.int/media/docs/default-source/medicines/norms-and-standards/guidelines/distribution/trs1025-annex7-(1).pdf?download=true",
+    "language": "en",
+    "category": "储存与配送"
+  },
+  {
+    "id": "who-temperature-sensitive-2011",
+    "title": "Model guidance for storage and transport of time- and temperature-sensitive pharmaceutical products",
+    "authority": "World Health Organization",
+    "url": "https://cdn.who.int/media/docs/default-source/medicines/norms-and-standards/guidelines/inspections/trs961-annex9-modelguidanceforstoragetransport.pdf?download=true",
+    "language": "en",
+    "category": "冷链管理"
+  },
+  {
+    "id": "who-essential-medicines-2025",
+    "title": "WHO Model List of Essential Medicines, 24th List (2025)",
+    "authority": "World Health Organization",
+    "url": "https://iris.who.int/server/api/core/bitstreams/17642505-ecd3-4940-a691-4f1dfa0d835a/content",
+    "language": "en",
+    "category": "基本药物"
+  },
+  {
+    "id": "nih-amoxicillin",
+    "title": "Amoxicillin Drug Information",
+    "authority": "NIH National Library of Medicine",
+    "url": "https://medlineplus.gov/druginfo/meds/a685001.html",
+    "language": "en",
+    "category": "药品信息"
+  },
+  {
+    "id": "nih-amlodipine",
+    "title": "Amlodipine Drug Information",
+    "authority": "NIH National Library of Medicine",
+    "url": "https://medlineplus.gov/druginfo/meds/a692044.html",
+    "language": "en",
+    "category": "药品信息"
+  },
+  {
+    "id": "nih-ibuprofen",
+    "title": "Ibuprofen Drug Information",
+    "authority": "NIH National Library of Medicine",
+    "url": "https://medlineplus.gov/druginfo/meds/a682159.html",
+    "language": "en",
+    "category": "药品信息"
+  },
+  {
+    "id": "nih-human-insulin",
+    "title": "Human Insulin Injection Drug Information",
+    "authority": "NIH National Library of Medicine",
+    "url": "https://medlineplus.gov/druginfo/meds/a682611.html",
+    "language": "en",
+    "category": "药品信息"
+  },
+  {
+    "id": "nih-cefixime",
+    "title": "Cefixime Drug Information",
+    "authority": "NIH National Library of Medicine",
+    "url": "https://medlineplus.gov/druginfo/meds/a690007.html",
+    "language": "en",
+    "category": "药品信息"
+  }
+]

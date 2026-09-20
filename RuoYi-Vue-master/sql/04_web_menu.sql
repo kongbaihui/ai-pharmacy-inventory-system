@@ -166,3 +166,22 @@ SET menu_name = 'AI前端界面', parent_id = 0, order_num = 2, path = 'ai',
     query = '', route_name = 'AIChat', visible = '0', status = '0', perms = 'system:ai:chat', icon = 'guide',
     remark = '现有 AI 对话前端页面'
 WHERE component = 'system/AIChat/index';
+
+SET @aiMenuId = (
+    SELECT menu_id FROM sys_menu
+    WHERE component = 'system/AIChat/index'
+    ORDER BY menu_id LIMIT 1
+);
+
+INSERT INTO sys_menu
+    (menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon,
+     create_by, create_time, update_by, update_time, remark)
+SELECT 'AI知识库重建', @aiMenuId, 1, '#', '', '', '',
+       1, 0, 'F', '0', '0', 'system:ai:knowledge', '#',
+       'admin', SYSDATE(), '', NULL, '允许从权威来源重新构建AI知识库'
+WHERE @aiMenuId IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM sys_menu
+      WHERE parent_id = @aiMenuId AND perms = 'system:ai:knowledge'
+  );
