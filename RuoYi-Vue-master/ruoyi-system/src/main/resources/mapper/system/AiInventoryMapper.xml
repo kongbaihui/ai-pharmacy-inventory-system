@@ -111,4 +111,38 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                  ifnull(outflow.outbound_qty_30d, 0) desc, m.med_id
         limit #{limit}
     </select>
+
+    <select id="selectOperationsBrief" resultType="com.ruoyi.system.domain.ai.AiInventoryOperationsBrief">
+        select
+            ifnull(sum(case when f.flow_type = '1' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as inbound_qty,
+            ifnull(sum(case when f.flow_type = '2' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as outbound_qty,
+            ifnull(sum(case when f.flow_type = '3' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as return_qty,
+            ifnull(sum(case when f.flow_type = '4' then f.change_qty else 0 end), 0) as adjustment_net_qty,
+            ifnull(sum(case when f.flow_type = '5' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as expired_clean_qty,
+            count(f.flow_id) as movement_count,
+            (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
+              where m.status = '0' and greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+                    &lt; ifnull(m.stock_min, 0)) as low_stock_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
+                and b.expire_date &lt;= date_add(curdate(), interval m.warn_days day)) as expiring_batch_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
+        from med_stock_flow f
+        where f.flow_time &gt;= date_sub(now(), interval #{days} day)
+    </select>
+
+    <select id="selectTopOutbound" resultType="com.ruoyi.system.domain.ai.AiOutboundRanking">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               sum(-f.change_qty) as outbound_qty, count(*) as outbound_transactions
+        from med_stock_flow f
+        inner join med_info m on m.med_id = f.med_id
+        where m.status = '0'
+          and f.flow_type = '2'
+          and f.change_qty &lt; 0
+          and f.flow_time &gt;= date_sub(now(), interval #{days} day)
+        group by m.med_id, m.med_code, m.med_name, m.med_spec, m.unit
+        order by outbound_qty desc, m.med_id
+        limit #{limit}
+    </select>
 </mapper>

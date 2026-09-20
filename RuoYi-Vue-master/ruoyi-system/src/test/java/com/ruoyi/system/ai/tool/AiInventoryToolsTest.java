@@ -3,6 +3,8 @@ package com.ruoyi.system.ai.tool;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import com.ruoyi.system.domain.ai.AiDemandSnapshot;
+import com.ruoyi.system.domain.ai.AiInventoryOperationsBrief;
+import com.ruoyi.system.domain.ai.AiOutboundRanking;
 import com.ruoyi.system.domain.ai.AiReplenishmentAdvice;
 import com.ruoyi.system.mapper.AiInventoryMapper;
 
@@ -85,6 +87,23 @@ class AiInventoryToolsTest
         assertThat(results).extracting(AiReplenishmentAdvice::getMedName)
                 .containsExactly("紧急药", "常规药");
         verify(mapper).selectDemandSnapshots(500);
+    }
+
+    @Test
+    void shouldClampOperationsBriefWindowAndRankingLimit()
+    {
+        AiInventoryOperationsBrief brief = new AiInventoryOperationsBrief();
+        AiOutboundRanking ranking = new AiOutboundRanking();
+        ranking.setMedName("阿莫西林胶囊");
+        when(mapper.selectOperationsBrief(90)).thenReturn(brief);
+        when(mapper.selectTopOutbound(90, 10)).thenReturn(List.of(ranking));
+
+        AiInventoryOperationsBrief result = tools.getInventoryOperationsBrief(365, 100);
+
+        assertThat(result.getAnalysisDays()).isEqualTo(90);
+        assertThat(result.getTopOutbound()).containsExactly(ranking);
+        verify(mapper).selectOperationsBrief(90);
+        verify(mapper).selectTopOutbound(90, 10);
     }
 
     private AiDemandSnapshot snapshot(Long id, String name, int currentQty, int availableQty,

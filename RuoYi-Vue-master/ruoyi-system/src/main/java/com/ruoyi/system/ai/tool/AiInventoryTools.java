@@ -11,6 +11,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.ai.AiExpiryBatch;
 import com.ruoyi.system.domain.ai.AiDemandSnapshot;
 import com.ruoyi.system.domain.ai.AiInventoryOverview;
+import com.ruoyi.system.domain.ai.AiInventoryOperationsBrief;
 import com.ruoyi.system.domain.ai.AiMedicineStock;
 import com.ruoyi.system.domain.ai.AiReplenishmentAdvice;
 import com.ruoyi.system.mapper.AiInventoryMapper;
@@ -30,6 +31,10 @@ public class AiInventoryTools
     private static final int MAX_COVERAGE_DAYS = 90;
     private static final int DEMAND_LOOKBACK_DAYS = 30;
     private static final int MAX_DEMAND_CANDIDATES = 500;
+    private static final int DEFAULT_ANALYSIS_DAYS = 30;
+    private static final int MAX_ANALYSIS_DAYS = 90;
+    private static final int DEFAULT_RANKING_LIMIT = 5;
+    private static final int MAX_RANKING_LIMIT = 10;
 
     private final AiInventoryMapper inventoryMapper;
 
@@ -67,6 +72,20 @@ public class AiInventoryTools
     public AiInventoryOverview getInventoryOverview()
     {
         return inventoryMapper.selectInventoryOverview();
+    }
+
+    @Tool(description = "生成指定时间窗口的结构化库存运营简报，包括出入库量、退库、盘点调整、过期清理、当前风险和出库排行")
+    public AiInventoryOperationsBrief getInventoryOperationsBrief(
+            @ToolParam(description = "统计过去天数，范围1到90，默认30", required = false) Integer days,
+            @ToolParam(description = "出库排行条数，范围1到10，默认5", required = false) Integer rankingLimit)
+    {
+        int safeDays = days == null ? DEFAULT_ANALYSIS_DAYS : Math.max(1, Math.min(days, MAX_ANALYSIS_DAYS));
+        int safeRankingLimit = rankingLimit == null ? DEFAULT_RANKING_LIMIT
+                : Math.max(1, Math.min(rankingLimit, MAX_RANKING_LIMIT));
+        AiInventoryOperationsBrief brief = inventoryMapper.selectOperationsBrief(safeDays);
+        brief.setAnalysisDays(safeDays);
+        brief.setTopOutbound(inventoryMapper.selectTopOutbound(safeDays, safeRankingLimit));
+        return brief;
     }
 
     @Tool(description = "根据实时可用库存、库存上下限和近30天实际出库量计算补货建议；仅提供建议，不会创建采购或入库单")
