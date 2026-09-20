@@ -157,12 +157,12 @@ INSERT INTO sys_menu
      is_frame, is_cache, menu_type, visible, status, perms, icon,
      create_by, create_time, update_by, update_time, remark)
 SELECT 'AI前端界面', 0, 2, 'ai', 'system/AIChat/index', '', 'AIChat',
-       1, 0, 'C', '0', '0', '', 'guide',
+       1, 0, 'C', '0', '0', 'system:ai:chat', 'guide',
        'admin', SYSDATE(), '', NULL, '现有 AI 对话前端页面'
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE component = 'system/AIChat/index');
 
 UPDATE sys_menu
 SET menu_name = 'AI前端界面', parent_id = 0, order_num = 2, path = 'ai',
-    query = '', route_name = 'AIChat', visible = '0', status = '0', icon = 'guide',
+    query = '', route_name = 'AIChat', visible = '0', status = '0', perms = 'system:ai:chat', icon = 'guide',
     remark = '现有 AI 对话前端页面'
 WHERE component = 'system/AIChat/index';

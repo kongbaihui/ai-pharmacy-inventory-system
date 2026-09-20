@@ -101,6 +101,7 @@ export default {
       // 3. 组装历史（不含正在思考的这条）
       const history = this.messages
         .filter(m => !m.thinking)
+        .slice(0, -1)
         .map(m => ({ role: m.role, content: m.content }))
 
       // 4. 发送请求
