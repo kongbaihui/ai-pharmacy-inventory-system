@@ -18,6 +18,24 @@ export function sendAiMessage(data) {
   })
 }
 
+/** 查询当前知识库构建状态。 */
+export function getKnowledgeStatus() {
+  return request({
+    url: '/system/ai/knowledge/status',
+    method: 'get',
+    timeout: 30000
+  })
+}
+
+/** 从白名单中的权威来源重新构建知识库。 */
+export function rebuildKnowledge() {
+  return request({
+    url: '/system/ai/knowledge/rebuild',
+    method: 'post',
+    timeout: 600000
+  })
+}
+
 /**
  * 以 SSE 流接收 AI 回复。POST 请求无法使用原生 EventSource，因而在这里解析响应流。
  * @param {Object} data 对话请求

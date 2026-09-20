@@ -84,6 +84,39 @@
           </div>
         </header>
 
+        <section class="knowledge-strip" :class="'is-' + knowledgeState">
+          <div class="knowledge-state">
+            <span class="state-mark"><i :class="knowledgeStateIcon" /></span>
+            <div>
+              <strong>{{ knowledgeStateText }}</strong>
+              <small>{{ knowledgeStateDescription }}</small>
+            </div>
+          </div>
+          <div v-if="knowledgeStatus.buildId" class="knowledge-metrics">
+            <span><b>{{ knowledgeStatus.successCount || 0 }}</b>/{{ knowledgeStatus.sourceCount || 0 }} 来源</span>
+            <span><b>{{ knowledgeStatus.chunkCount || 0 }}</b> 片段</span>
+            <span v-if="knowledgeStatus.finishedAt">{{ formatKnowledgeTime(knowledgeStatus.finishedAt) }}</span>
+          </div>
+          <div class="knowledge-actions">
+            <el-button
+              type="text"
+              icon="el-icon-refresh"
+              :loading="knowledgeStatusLoading"
+              :disabled="knowledgeRebuilding"
+              @click="loadKnowledgeStatus"
+            >刷新</el-button>
+            <el-button
+              v-hasPermi="['system:ai:knowledge']"
+              size="mini"
+              type="primary"
+              plain
+              icon="el-icon-document-checked"
+              :loading="knowledgeRebuilding"
+              @click="handleKnowledgeRebuild"
+            >{{ knowledgeRebuilding ? '正在构建' : '重新构建' }}</el-button>
+          </div>
+        </section>
+
         <div ref="msgBody" class="message-ledger" aria-live="polite">
           <div
             v-for="(message, index) in currentMessages"
@@ -149,7 +182,7 @@
 </template>
 
 <script>
-import { streamAiMessage } from '@/api/system/ai'
+import { getKnowledgeStatus, rebuildKnowledge, streamAiMessage } from '@/api/system/ai'
 
 const STORAGE_KEY = 'ai_chat_sessions'
 const WELCOME_MESSAGE = '你好，我是药房智能助手。我可以读取实时库存与出入库数据，也可以检索内置的权威药学资料。你可以直接描述需要核对的问题。'
@@ -161,6 +194,9 @@ export default {
       inputText: '',
       sending: false,
       streamController: null,
+      knowledgeStatusLoading: false,
+      knowledgeRebuilding: false,
+      knowledgeStatus: { status: 'loading' },
       sessions: [],
       activeSessionId: null,
       quickTasks: [
@@ -197,16 +233,85 @@ export default {
     },
     currentMessages() {
       return this.currentSession ? this.currentSession.messages : []
+    },
+    knowledgeState() {
+      if (this.knowledgeRebuilding) return 'building'
+      return this.knowledgeStatus.status || 'unavailable'
+    },
+    knowledgeStateText() {
+      const labels = {
+        loading: '正在读取资料状态',
+        ready: '权威资料已就绪',
+        partial: '部分权威资料可用',
+        not_built: '权威资料尚未构建',
+        building: '正在构建权威资料',
+        failed: '权威资料构建失败',
+        unavailable: '暂时无法读取资料状态'
+      }
+      return labels[this.knowledgeState] || labels.unavailable
+    },
+    knowledgeStateDescription() {
+      if (this.knowledgeState === 'not_built') return '管理员需要先执行一次构建，药学问答才能引用资料。'
+      if (this.knowledgeState === 'building') return '正在下载、校验并切分官方资料，请保持页面开启。'
+      if (this.knowledgeState === 'partial') return `有 ${this.knowledgeStatus.failedCount || 0} 个来源未成功，可继续使用已完成的资料。`
+      if (this.knowledgeState === 'failed') return '有效来源数量不足，请检查服务器网络后重新构建。'
+      if (this.knowledgeState === 'unavailable') return '确认后端已启动，并检查当前账号的 AI 对话权限。'
+      if (this.knowledgeState === 'ready') return '药学回答将只依据已收录资料，并附标题、机构和原始链接。'
+      return '正在确认当前可用的资料版本。'
+    },
+    knowledgeStateIcon() {
+      if (this.knowledgeState === 'ready') return 'el-icon-check'
+      if (this.knowledgeState === 'partial') return 'el-icon-warning-outline'
+      if (this.knowledgeState === 'building' || this.knowledgeState === 'loading') return 'el-icon-loading'
+      return 'el-icon-info'
     }
   },
   created() {
     this.loadSessions()
     if (this.sessions.length === 0) this.handleNewSession()
+    this.loadKnowledgeStatus()
   },
   beforeDestroy() {
     if (this.streamController) this.streamController.abort()
   },
   methods: {
+    loadKnowledgeStatus() {
+      if (this.knowledgeStatusLoading || this.knowledgeRebuilding) return
+      this.knowledgeStatusLoading = true
+      getKnowledgeStatus()
+        .then(response => {
+          this.knowledgeStatus = response && response.data
+            ? response.data
+            : { status: 'unavailable' }
+        })
+        .catch(() => {
+          this.knowledgeStatus = { status: 'unavailable' }
+        })
+        .finally(() => {
+          this.knowledgeStatusLoading = false
+        })
+    },
+    handleKnowledgeRebuild() {
+      if (this.knowledgeRebuilding) return
+      this.$modal.confirm('将从18个权威来源重新下载并构建知识库，过程可能持续数分钟。是否继续？').then(() => {
+        this.knowledgeRebuilding = true
+        this.knowledgeStatus = Object.assign({}, this.knowledgeStatus, { status: 'building' })
+        rebuildKnowledge()
+          .then(response => {
+            this.knowledgeStatus = response.data || { status: 'unavailable' }
+            if (this.knowledgeStatus.status === 'ready') this.$modal.msgSuccess('知识库构建完成')
+            else this.$modal.msgWarning('知识库已更新，但部分来源未能成功获取')
+          })
+          .catch(() => {
+            this.$modal.msgError('知识库构建失败，请检查服务器网络后重试')
+            this.knowledgeRebuilding = false
+            this.loadKnowledgeStatus()
+          })
+          .finally(() => {
+            this.knowledgeRebuilding = false
+          })
+      }).catch(() => {})
+    },
     loadSessions() {
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
@@ -363,6 +468,13 @@ export default {
       const today = date.getFullYear() === now.getFullYear() &&
         date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
       if (today) return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+      return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    },
+    formatKnowledgeTime(timestamp) {
+      if (!timestamp) return ''
+      const date = new Date(timestamp)
+      if (Number.isNaN(date.getTime())) return ''
+      const pad = number => (number < 10 ? '0' + number : number)
       return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
   }
@@ -582,6 +694,74 @@ $line: #dbe5df;
   &.source { color: #477364; border-color: #c6dbd2; background: #eef6f2; }
 }
 
+.knowledge-strip {
+  display: flex;
+  min-height: 62px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 9px 24px;
+  border-bottom: 1px solid $line;
+  background: #f3f7f5;
+
+  &.is-partial, &.is-not_built, &.is-failed { background: #fbf7ee; }
+  &.is-unavailable { background: #f7f7f6; }
+}
+
+.knowledge-state {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+
+  strong, small { display: block; }
+  strong { color: #28473d; font-size: 12px; font-weight: 600; }
+  small { margin-top: 3px; color: #70827a; font-size: 10px; line-height: 1.4; }
+}
+
+.state-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid #bdd3c9;
+  border-radius: 7px;
+  color: $green;
+  background: #e4eee9;
+}
+
+.is-partial .state-mark, .is-not_built .state-mark, .is-failed .state-mark {
+  border-color: #e1cda9;
+  color: $amber;
+  background: #f7ecd7;
+}
+
+.knowledge-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #6f8179;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+
+  b { color: $ink; font-size: 13px; font-weight: 600; }
+}
+
+.knowledge-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+
+  ::v-deep .el-button--primary.is-plain {
+    border-color: #abc9bc;
+    color: $green;
+    background: #f8fbf9;
+  }
+}
+
 .message-ledger {
   flex: 1;
   min-height: 0;
@@ -747,6 +927,7 @@ $line: #dbe5df;
   .task-section .section-label { grid-column: 1 / -1; }
   .session-section, .source-note { display: none; }
   .conversation-panel { min-height: 720px; }
+  .knowledge-strip { align-items: flex-start; flex-wrap: wrap; }
 }
 
 @media (max-width: 640px) {
@@ -754,6 +935,8 @@ $line: #dbe5df;
   .task-section { grid-template-columns: 1fr; }
   .conversation-header { align-items: flex-start; flex-direction: column; padding: 14px 16px; }
   .header-actions { flex-wrap: wrap; }
+  .knowledge-strip { padding: 10px 16px; }
+  .knowledge-metrics { width: 100%; order: 3; }
   .message-ledger { padding: 22px 14px; }
   .message-column { max-width: 86%; }
   .composer { padding: 10px 14px; }

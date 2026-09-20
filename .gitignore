@@ -52,6 +52,8 @@ pnpm-debug.log*
 **/upload/
 **/uploads/
 **/profile/
+!RuoYi-Vue2-master/src/views/system/user/profile/
+!RuoYi-Vue2-master/src/views/system/user/profile/**
 **/runtime/ai/
 **/.ai-cache/
 *.log
