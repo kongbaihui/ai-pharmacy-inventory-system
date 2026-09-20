@@ -47,6 +47,28 @@ user:
 
 # Spring配置
 spring:
+  ai:
+    # 默认关闭，避免未配置密钥时影响普通业务启动；启用时设置 AI_CHAT_PROVIDER=openai
+    model:
+      chat: ${AI_CHAT_PROVIDER:none}
+      embedding: ${AI_EMBEDDING_PROVIDER:none}
+    openai:
+      chat:
+        base-url: ${AI_CHAT_BASE_URL:https://api.deepseek.com}
+        api-key: ${AI_CHAT_API_KEY:}
+        model: ${AI_CHAT_MODEL:deepseek-flash}
+        max-tokens: ${AI_CHAT_MAX_TOKENS:2048}
+        extra-body:
+          thinking:
+            type: ${AI_CHAT_THINKING:disabled}
+      timeout: ${AI_CHAT_TIMEOUT:60s}
+      max-retries: ${AI_CHAT_MAX_RETRIES:2}
+    retry:
+      max-attempts: ${AI_CHAT_RETRY_ATTEMPTS:3}
+      backoff:
+        initial-interval: 1s
+        multiplier: 2
+        max-interval: 8s
   # 资源信息
   messages:
     # 国际化资源文件路径

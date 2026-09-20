@@ -33,6 +33,9 @@ pnpm-debug.log*
 *.swo
 
 # Local-only configuration and secrets
+**/.env
+**/.env.*
+!**/.env.example
 **/application-local.yml
 **/application-local.yaml
 **/application-*-local.yml
@@ -49,8 +52,15 @@ pnpm-debug.log*
 **/upload/
 **/uploads/
 **/profile/
+**/runtime/ai/
+**/.ai-cache/
 *.log
 *.pid
+
+# Local planning and generated working documents
+/docs/codebase/
+/docs/*任务清单*.md
+/ignorance/
 
 # Database backups and local archives
 *dump*.sql
