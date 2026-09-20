@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -12,6 +13,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.ai.tool.AiInventoryTools;
@@ -19,6 +21,7 @@ import com.ruoyi.system.ai.tool.AiKnowledgeTools;
 import com.ruoyi.system.domain.ai.AiChatMessage;
 import com.ruoyi.system.domain.ai.AiChatRequest;
 import com.ruoyi.system.domain.ai.AiChatResponse;
+import com.ruoyi.system.domain.ai.AiChatStreamEvent;
 import com.ruoyi.system.service.IAiChatService;
 
 /**
@@ -74,9 +77,7 @@ public class AiChatServiceImpl implements IAiChatService
             {
                 throw new ServiceException("AI 服务未返回有效内容，请稍后重试");
             }
-            String sessionId = StringUtils.isBlank(request.getSessionId())
-                    ? UUID.randomUUID().toString()
-                    : request.getSessionId();
+            String sessionId = resolveSessionId(request);
             return new AiChatResponse(reply, sessionId);
         }
         catch (ServiceException e)
@@ -88,6 +89,38 @@ public class AiChatServiceImpl implements IAiChatService
             log.warn("AI chat request failed: {}", e.getClass().getSimpleName());
             throw new ServiceException("AI 服务暂不可用，请稍后重试");
         }
+    }
+
+    @Override
+    public Flux<AiChatStreamEvent> stream(AiChatRequest request)
+    {
+        String sessionId = resolveSessionId(request);
+        AiChatStreamEvent metadata = event("meta", null, sessionId);
+        if (chatClient == null)
+        {
+            return Flux.just(metadata, event("error", "AI 服务未启用，请联系管理员完成配置", sessionId));
+        }
+
+        return Flux.concat(Flux.just(metadata), Flux.defer(() ->
+        {
+            AtomicBoolean hasContent = new AtomicBoolean(false);
+            Flux<AiChatStreamEvent> deltas = chatClient.prompt()
+                    .messages(buildHistoryMessages(request))
+                    .user(request.getMessage().trim())
+                    .stream()
+                    .content()
+                    .filter(StringUtils::isNotBlank)
+                    .doOnNext(content -> hasContent.set(true))
+                    .map(content -> event("delta", content, sessionId));
+            Flux<AiChatStreamEvent> completion = Flux.defer(() -> hasContent.get()
+                    ? Flux.just(event("done", null, sessionId))
+                    : Flux.just(event("error", "AI 服务未返回有效内容，请稍后重试", sessionId)));
+            return deltas.concatWith(completion);
+        }).onErrorResume(exception ->
+        {
+            log.warn("AI streaming chat request failed: {}", exception.getClass().getSimpleName());
+            return Flux.just(event("error", "AI 服务暂不可用，请稍后重试", sessionId));
+        }));
     }
 
     List<Message> buildHistoryMessages(AiChatRequest request)
@@ -119,5 +152,17 @@ public class AiChatServiceImpl implements IAiChatService
             }
         }
         return messages;
+    }
+
+    private String resolveSessionId(AiChatRequest request)
+    {
+        return StringUtils.isBlank(request.getSessionId())
+                ? UUID.randomUUID().toString()
+                : request.getSessionId();
+    }
+
+    private AiChatStreamEvent event(String type, String content, String sessionId)
+    {
+        return new AiChatStreamEvent(type, content, sessionId);
     }
 }

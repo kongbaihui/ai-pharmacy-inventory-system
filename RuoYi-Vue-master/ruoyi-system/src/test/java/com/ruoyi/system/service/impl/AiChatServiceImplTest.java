@@ -12,6 +12,7 @@ import com.ruoyi.system.ai.tool.AiInventoryTools;
 import com.ruoyi.system.ai.tool.AiKnowledgeTools;
 import com.ruoyi.system.domain.ai.AiChatMessage;
 import com.ruoyi.system.domain.ai.AiChatRequest;
+import com.ruoyi.system.domain.ai.AiChatStreamEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -65,6 +66,21 @@ class AiChatServiceImplTest
         assertThatThrownBy(() -> service.chat(request))
                 .isInstanceOf(ServiceException.class)
                 .hasMessageContaining("AI 服务未启用");
+    }
+
+    @Test
+    void shouldReturnSafeStreamEventsWhenAiIsDisabled()
+    {
+        AiChatRequest request = new AiChatRequest();
+        request.setMessage("你好");
+        request.setSessionId("session-1");
+
+        List<AiChatStreamEvent> events = disabledService().stream(request).collectList().block();
+
+        assertThat(events).extracting(AiChatStreamEvent::getType)
+                .containsExactly("meta", "error");
+        assertThat(events).allMatch(event -> "session-1".equals(event.getSessionId()));
+        assertThat(events.get(1).getContent()).doesNotContain("Exception");
     }
 
     @SuppressWarnings("unchecked")
