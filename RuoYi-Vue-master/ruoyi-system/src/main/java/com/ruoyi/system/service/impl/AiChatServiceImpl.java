@@ -14,6 +14,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.system.ai.tool.AiInventoryTools;
 import com.ruoyi.system.domain.ai.AiChatMessage;
 import com.ruoyi.system.domain.ai.AiChatRequest;
 import com.ruoyi.system.domain.ai.AiChatResponse;
@@ -39,10 +40,13 @@ public class AiChatServiceImpl implements IAiChatService
 
     private final ChatClient chatClient;
 
-    public AiChatServiceImpl(ObjectProvider<ChatClient.Builder> builderProvider)
+    public AiChatServiceImpl(ObjectProvider<ChatClient.Builder> builderProvider, AiInventoryTools inventoryTools)
     {
         ChatClient.Builder builder = builderProvider.getIfAvailable();
-        this.chatClient = builder == null ? null : builder.defaultSystem(SYSTEM_PROMPT).build();
+        this.chatClient = builder == null ? null : builder
+                .defaultSystem(SYSTEM_PROMPT)
+                .defaultTools(inventoryTools)
+                .build();
     }
 
     @Override
