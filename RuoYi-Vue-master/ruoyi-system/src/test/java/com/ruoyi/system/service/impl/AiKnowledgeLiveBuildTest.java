@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.system.ai.knowledge.KnowledgeTextChunker;
 import com.ruoyi.system.config.AiKnowledgeProperties;
 import com.ruoyi.system.domain.ai.KnowledgeBuildResult;
+import com.ruoyi.system.domain.ai.KnowledgeSearchResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,10 +28,14 @@ class AiKnowledgeLiveBuildTest
         AiKnowledgeServiceImpl service = new AiKnowledgeServiceImpl(properties, chunker, objectMapper);
 
         KnowledgeBuildResult result = service.rebuild();
+        AiKnowledgeSearchServiceImpl searchService = new AiKnowledgeSearchServiceImpl(properties, objectMapper);
+        java.util.List<KnowledgeSearchResult> matches = searchService.search("胰岛素如何储存和冷链运输", 3);
 
         assertThat(result.getStatus()).isIn("ready", "partial");
         assertThat(result.getSuccessCount()).isGreaterThanOrEqualTo(properties.getMinimumSourceCount());
         assertThat(result.getChunkCount()).isGreaterThan(result.getSuccessCount());
         assertThat(Files.isRegularFile(Path.of(properties.getWorkDir(), "current.json"))).isTrue();
+        assertThat(matches).isNotEmpty();
+        assertThat(matches).allMatch(match -> match.getUrl().startsWith("https://"));
     }
 }

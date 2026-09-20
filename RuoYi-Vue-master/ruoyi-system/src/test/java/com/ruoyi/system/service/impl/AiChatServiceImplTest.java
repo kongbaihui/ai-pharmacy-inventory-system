@@ -9,6 +9,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.ObjectProvider;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.ai.tool.AiInventoryTools;
+import com.ruoyi.system.ai.tool.AiKnowledgeTools;
 import com.ruoyi.system.domain.ai.AiChatMessage;
 import com.ruoyi.system.domain.ai.AiChatRequest;
 
@@ -71,7 +72,7 @@ class AiChatServiceImplTest
     {
         ObjectProvider<ChatClient.Builder> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(null);
-        return new AiChatServiceImpl(provider, mock(AiInventoryTools.class));
+        return new AiChatServiceImpl(provider, mock(AiInventoryTools.class), mock(AiKnowledgeTools.class));
     }
 
     private AiChatMessage message(String role, String content)
