@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AiInventoryMapper">
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiMedicineStock" id="AiMedicineStockResult">
+        <result property="medId" column="med_id" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="tradeName" column="trade_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="categoryName" column="category_name" />
+        <result property="manufacturer" column="manufacturer" />
+        <result property="approvalNo" column="approval_no" />
+        <result property="storageCond" column="storage_cond" />
+        <result property="stockQty" column="stock_qty" />
+        <result property="availableQty" column="available_qty" />
+        <result property="stockMin" column="stock_min" />
+        <result property="stockMax" column="stock_max" />
+        <result property="stockStatus" column="stock_status" />
+    </resultMap>
+
+    <sql id="medicineStockColumns">
+        select m.med_id, m.med_code, m.med_name, m.trade_name, m.med_spec, m.unit,
+               c.category_name, m.manufacturer, m.approval_no, m.storage_cond,
+               ifnull(st.total_qty, 0) as stock_qty,
+               greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0) as available_qty,
+               m.stock_min, m.stock_max,
+               case
+                   when ifnull(st.total_qty, 0) &lt; m.stock_min then '库存不足'
+                   when m.stock_max &gt; 0 and ifnull(st.total_qty, 0) &gt; m.stock_max then '库存积压'
+                   else '正常'
+               end as stock_status
+        from med_info m
+        left join med_category c on c.category_id = m.category_id
+        left join med_stock st on st.med_id = m.med_id
+    </sql>
+
+    <select id="searchMedicineStock" resultMap="AiMedicineStockResult">
+        <include refid="medicineStockColumns" />
+        where m.status = '0'
+        <if test="keyword != null and keyword != ''">
+            and (m.med_code like concat('%', #{keyword}, '%')
+                 or m.med_name like concat('%', #{keyword}, '%')
+                 or m.trade_name like concat('%', #{keyword}, '%')
+                 or m.approval_no like concat('%', #{keyword}, '%'))
+        </if>
+        order by m.med_id
+        limit #{limit}
+    </select>
+
+    <select id="selectLowStock" resultMap="AiMedicineStockResult">
+        <include refid="medicineStockColumns" />
+        where m.status = '0' and ifnull(st.total_qty, 0) &lt; m.stock_min
+        order by (m.stock_min - ifnull(st.total_qty, 0)) desc, m.med_id
+        limit #{limit}
+    </select>
+
+    <select id="selectExpiringBatches" resultType="com.ruoyi.system.domain.ai.AiExpiryBatch">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               b.batch_no, b.expire_date, datediff(b.expire_date, curdate()) as remain_days,
+               b.remain_qty, s.supplier_name
+        from med_stock_batch b
+        inner join med_info m on m.med_id = b.med_id
+        left join med_supplier s on s.supplier_id = b.supplier_id
+        where m.status = '0'
+          and b.remain_qty &gt; 0
+          and b.expire_date &gt;= curdate()
+          and b.expire_date &lt;= date_add(curdate(), interval #{days} day)
+        order by b.expire_date, m.med_id, b.batch_id
+        limit #{limit}
+    </select>
+
+    <select id="selectInventoryOverview" resultType="com.ruoyi.system.domain.ai.AiInventoryOverview">
+        select
+            (select count(*) from med_info where status = '0') as medicine_count,
+            (select ifnull(sum(st.total_qty), 0)
+               from med_stock st inner join med_info m on m.med_id = st.med_id where m.status = '0') as stock_qty,
+            (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
+              where m.status = '0' and ifnull(st.total_qty, 0) &lt; m.stock_min) as low_stock_count,
+            (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
+              where m.status = '0' and m.stock_max &gt; 0 and ifnull(st.total_qty, 0) &gt; m.stock_max) as overstock_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
+                and b.expire_date &lt;= date_add(curdate(), interval m.warn_days day)) as expiring_batch_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
+    </select>
+
+    <select id="selectDemandSnapshots" resultType="com.ruoyi.system.domain.ai.AiDemandSnapshot">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               ifnull(st.total_qty, 0) as current_qty,
+               greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0) as available_qty,
+               ifnull(m.stock_min, 0) as stock_min, ifnull(m.stock_max, 0) as stock_max,
+               ifnull(outflow.outbound_qty_30d, 0) as outbound_qty_30d
+        from med_info m
+        left join med_stock st on st.med_id = m.med_id
+        left join (
+            select med_id, sum(-change_qty) as outbound_qty_30d
+            from med_stock_flow
+            where flow_type = '2'
+              and change_qty &lt; 0
+              and flow_time &gt;= date_sub(now(), interval 30 day)
+            group by med_id
+        ) outflow on outflow.med_id = m.med_id
+        where m.status = '0'
+        order by (greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+                  &lt; ifnull(m.stock_min, 0)) desc,
+                 ifnull(outflow.outbound_qty_30d, 0) desc, m.med_id
+        limit #{limit}
+    </select>
+
+    <select id="selectOperationsBrief" resultType="com.ruoyi.system.domain.ai.AiInventoryOperationsBrief">
+        select
+            ifnull(sum(case when f.flow_type = '1' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as inbound_qty,
+            ifnull(sum(case when f.flow_type = '2' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as outbound_qty,
+            ifnull(sum(case when f.flow_type = '3' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as return_qty,
+            ifnull(sum(case when f.flow_type = '4' then f.change_qty else 0 end), 0) as adjustment_net_qty,
+            ifnull(sum(case when f.flow_type = '5' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as expired_clean_qty,
+            count(f.flow_id) as movement_count,
+            (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
+              where m.status = '0' and greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+                    &lt; ifnull(m.stock_min, 0)) as low_stock_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
+                and b.expire_date &lt;= date_add(curdate(), interval m.warn_days day)) as expiring_batch_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
+        from med_stock_flow f
+        where f.flow_time &gt;= date_sub(now(), interval #{days} day)
+    </select>
+
+    <select id="selectTopOutbound" resultType="com.ruoyi.system.domain.ai.AiOutboundRanking">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               sum(-f.change_qty) as outbound_qty, count(*) as outbound_transactions
+        from med_stock_flow f
+        inner join med_info m on m.med_id = f.med_id
+        where m.status = '0'
+          and f.flow_type = '2'
+          and f.change_qty &lt; 0
+          and f.flow_time &gt;= date_sub(now(), interval #{days} day)
+        group by m.med_id, m.med_code, m.med_name, m.med_spec, m.unit
+        order by outbound_qty desc, m.med_id
+        limit #{limit}
+    </select>
+</mapper>
