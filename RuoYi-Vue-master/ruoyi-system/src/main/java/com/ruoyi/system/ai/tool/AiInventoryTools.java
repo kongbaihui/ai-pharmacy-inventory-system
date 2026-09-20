@@ -1,13 +1,18 @@
 package com.ruoyi.system.ai.tool;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.ai.AiExpiryBatch;
+import com.ruoyi.system.domain.ai.AiDemandSnapshot;
 import com.ruoyi.system.domain.ai.AiInventoryOverview;
 import com.ruoyi.system.domain.ai.AiMedicineStock;
+import com.ruoyi.system.domain.ai.AiReplenishmentAdvice;
 import com.ruoyi.system.mapper.AiInventoryMapper;
 
 /**
@@ -20,6 +25,11 @@ public class AiInventoryTools
     private static final int MAX_LIMIT = 20;
     private static final int DEFAULT_EXPIRY_DAYS = 90;
     private static final int MAX_EXPIRY_DAYS = 365;
+    private static final int DEFAULT_COVERAGE_DAYS = 30;
+    private static final int MIN_COVERAGE_DAYS = 7;
+    private static final int MAX_COVERAGE_DAYS = 90;
+    private static final int DEMAND_LOOKBACK_DAYS = 30;
+    private static final int MAX_DEMAND_CANDIDATES = 500;
 
     private final AiInventoryMapper inventoryMapper;
 
@@ -57,6 +67,108 @@ public class AiInventoryTools
     public AiInventoryOverview getInventoryOverview()
     {
         return inventoryMapper.selectInventoryOverview();
+    }
+
+    @Tool(description = "根据实时可用库存、库存上下限和近30天实际出库量计算补货建议；仅提供建议，不会创建采购或入库单")
+    public List<AiReplenishmentAdvice> listReplenishmentAdvice(
+            @ToolParam(description = "希望库存覆盖的未来天数，范围7到90，默认30", required = false) Integer coverageDays,
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+    {
+        int safeCoverageDays = coverageDays == null ? DEFAULT_COVERAGE_DAYS
+                : Math.max(MIN_COVERAGE_DAYS, Math.min(coverageDays, MAX_COVERAGE_DAYS));
+        return inventoryMapper.selectDemandSnapshots(MAX_DEMAND_CANDIDATES).stream()
+                .map(snapshot -> calculateAdvice(snapshot, safeCoverageDays))
+                .filter(advice -> advice.getSuggestedOrderQty() > 0)
+                .sorted(Comparator.comparingInt(this::urgencyRank)
+                        .thenComparing(AiReplenishmentAdvice::getSuggestedOrderQty, Comparator.reverseOrder())
+                        .thenComparing(AiReplenishmentAdvice::getMedId))
+                .limit(normalizeLimit(limit))
+                .toList();
+    }
+
+    AiReplenishmentAdvice calculateAdvice(AiDemandSnapshot snapshot, int coverageDays)
+    {
+        int currentQty = nonNegative(snapshot.getCurrentQty());
+        int availableQty = nonNegative(snapshot.getAvailableQty());
+        int stockMin = nonNegative(snapshot.getStockMin());
+        int stockMax = nonNegative(snapshot.getStockMax());
+        int outboundQty = nonNegative(snapshot.getOutboundQty30d());
+        BigDecimal dailyOutbound = BigDecimal.valueOf(outboundQty)
+                .divide(BigDecimal.valueOf(DEMAND_LOOKBACK_DAYS), 2, RoundingMode.HALF_UP);
+        int demandTarget = BigDecimal.valueOf(outboundQty)
+                .multiply(BigDecimal.valueOf(coverageDays))
+                .divide(BigDecimal.valueOf(DEMAND_LOOKBACK_DAYS), 0, RoundingMode.CEILING)
+                .intValue();
+        int targetStock = Math.max(stockMin, demandTarget);
+        if (stockMax >= stockMin && stockMax > 0)
+        {
+            targetStock = Math.min(targetStock, stockMax);
+        }
+        int suggestedQty = Math.max(targetStock - availableQty, 0);
+        BigDecimal daysOfSupply = outboundQty == 0 ? null
+                : BigDecimal.valueOf(availableQty)
+                        .multiply(BigDecimal.valueOf(DEMAND_LOOKBACK_DAYS))
+                        .divide(BigDecimal.valueOf(outboundQty), 1, RoundingMode.HALF_UP);
+
+        AiReplenishmentAdvice advice = new AiReplenishmentAdvice();
+        advice.setMedId(snapshot.getMedId());
+        advice.setMedCode(snapshot.getMedCode());
+        advice.setMedName(snapshot.getMedName());
+        advice.setMedSpec(snapshot.getMedSpec());
+        advice.setUnit(snapshot.getUnit());
+        advice.setCurrentQty(currentQty);
+        advice.setAvailableQty(availableQty);
+        advice.setStockMin(stockMin);
+        advice.setStockMax(stockMax);
+        advice.setOutboundQty30d(outboundQty);
+        advice.setAverageDailyOutbound(dailyOutbound);
+        advice.setDaysOfSupply(daysOfSupply);
+        advice.setTargetStock(targetStock);
+        advice.setSuggestedOrderQty(suggestedQty);
+        advice.setUrgency(urgency(availableQty, stockMin, daysOfSupply));
+        advice.setReason(reason(outboundQty, coverageDays, stockMax, stockMin, demandTarget));
+        return advice;
+    }
+
+    private String urgency(int availableQty, int stockMin, BigDecimal daysOfSupply)
+    {
+        if (availableQty == 0 || daysOfSupply != null && daysOfSupply.compareTo(BigDecimal.valueOf(7)) <= 0)
+        {
+            return "紧急";
+        }
+        if (availableQty < stockMin || daysOfSupply != null && daysOfSupply.compareTo(BigDecimal.valueOf(14)) <= 0)
+        {
+            return "高";
+        }
+        return "常规";
+    }
+
+    private String reason(int outboundQty, int coverageDays, int stockMax, int stockMin, int demandTarget)
+    {
+        if (outboundQty == 0)
+        {
+            return "近30天无出库记录，按库存下限补足";
+        }
+        if (stockMax >= stockMin && stockMax > 0 && demandTarget > stockMax)
+        {
+            return "按近30天日均出库估算" + coverageDays + "天需求，并受库存上限约束";
+        }
+        return "按近30天日均出库估算" + coverageDays + "天需求";
+    }
+
+    private int urgencyRank(AiReplenishmentAdvice advice)
+    {
+        return switch (advice.getUrgency())
+        {
+            case "紧急" -> 0;
+            case "高" -> 1;
+            default -> 2;
+        };
+    }
+
+    private int nonNegative(Integer value)
+    {
+        return value == null ? 0 : Math.max(value, 0);
     }
 
     private int normalizeLimit(Integer limit)

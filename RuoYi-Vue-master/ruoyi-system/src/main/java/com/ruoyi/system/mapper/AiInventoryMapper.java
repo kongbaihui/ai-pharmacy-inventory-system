@@ -3,6 +3,7 @@ package com.ruoyi.system.mapper;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.ai.AiExpiryBatch;
+import com.ruoyi.system.domain.ai.AiDemandSnapshot;
 import com.ruoyi.system.domain.ai.AiInventoryOverview;
 import com.ruoyi.system.domain.ai.AiMedicineStock;
 
@@ -18,4 +19,6 @@ public interface AiInventoryMapper
     List<AiExpiryBatch> selectExpiringBatches(@Param("days") int days, @Param("limit") int limit);
 
     AiInventoryOverview selectInventoryOverview();
+
+    List<AiDemandSnapshot> selectDemandSnapshots(@Param("limit") int limit);
 }

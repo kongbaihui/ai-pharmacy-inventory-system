@@ -88,4 +88,27 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
               where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
     </select>
+
+    <select id="selectDemandSnapshots" resultType="com.ruoyi.system.domain.ai.AiDemandSnapshot">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               ifnull(st.total_qty, 0) as current_qty,
+               greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0) as available_qty,
+               ifnull(m.stock_min, 0) as stock_min, ifnull(m.stock_max, 0) as stock_max,
+               ifnull(outflow.outbound_qty_30d, 0) as outbound_qty_30d
+        from med_info m
+        left join med_stock st on st.med_id = m.med_id
+        left join (
+            select med_id, sum(-change_qty) as outbound_qty_30d
+            from med_stock_flow
+            where flow_type = '2'
+              and change_qty &lt; 0
+              and flow_time &gt;= date_sub(now(), interval 30 day)
+            group by med_id
+        ) outflow on outflow.med_id = m.med_id
+        where m.status = '0'
+        order by (greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+                  &lt; ifnull(m.stock_min, 0)) desc,
+                 ifnull(outflow.outbound_qty_30d, 0) desc, m.med_id
+        limit #{limit}
+    </select>
 </mapper>
