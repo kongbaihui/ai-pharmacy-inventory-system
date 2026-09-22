@@ -1,5 +1,7 @@
 package com.ruoyi.system.domain.ai;
 
+import java.util.List;
+
 /**
  * AI 对话响应。
  */
@@ -9,10 +11,16 @@ public class AiChatResponse
 
     private final String sessionId;
 
-    public AiChatResponse(String reply, String sessionId)
+    private final String requestId;
+
+    private final List<AiCitationSource> sources;
+
+    public AiChatResponse(String reply, String sessionId, String requestId, List<AiCitationSource> sources)
     {
         this.reply = reply;
         this.sessionId = sessionId;
+        this.requestId = requestId;
+        this.sources = sources;
     }
 
     public String getReply()
@@ -24,4 +32,8 @@ public class AiChatResponse
     {
         return sessionId;
     }
+
+    public String getRequestId() { return requestId; }
+
+    public List<AiCitationSource> getSources() { return sources; }
 }

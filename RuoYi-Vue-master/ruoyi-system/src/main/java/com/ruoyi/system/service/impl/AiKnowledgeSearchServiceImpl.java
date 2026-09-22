@@ -24,6 +24,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.config.AiKnowledgeProperties;
 import com.ruoyi.system.domain.ai.KnowledgeChunk;
 import com.ruoyi.system.domain.ai.KnowledgeSearchResult;
+import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.service.IAiKnowledgeSearchService;
 
 /**
@@ -55,7 +56,7 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
     {
         if (StringUtils.isBlank(query))
         {
-            throw new ServiceException("知识检索关键词不能为空");
+            throw new ServiceException("知识检索关键词不能为空", AiErrorCode.PARAMETER_ERROR.getCode());
         }
         List<String> queryTerms = tokenize(query);
         if (queryTerms.isEmpty())
@@ -101,7 +102,7 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
         Path pointer = root.resolve("current.json");
         if (!Files.isRegularFile(pointer))
         {
-            throw new ServiceException("知识库尚未构建，请先执行知识库重建");
+            throw knowledgeNotReady("知识库尚未构建，请先执行知识库重建");
         }
         try
         {
@@ -115,7 +116,7 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
         }
         catch (IOException e)
         {
-            throw new ServiceException("知识库版本信息不可用");
+            throw knowledgeNotReady("知识库版本信息不可用");
         }
     }
 
@@ -124,7 +125,7 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
         Path chunksFile = root.resolve("builds").resolve(buildId).resolve("chunks.jsonl").normalize();
         if (!chunksFile.startsWith(root) || !Files.isRegularFile(chunksFile))
         {
-            throw new ServiceException("知识库切片文件不存在，请重新构建知识库");
+            throw knowledgeNotReady("知识库切片文件不存在，请重新构建知识库");
         }
 
         List<IndexedChunk> chunks = new ArrayList<>();
@@ -148,11 +149,11 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
         }
         catch (IOException e)
         {
-            throw new ServiceException("知识库索引加载失败，请重新构建知识库");
+            throw knowledgeNotReady("知识库索引加载失败，请重新构建知识库");
         }
         if (chunks.isEmpty())
         {
-            throw new ServiceException("知识库没有可检索内容，请重新构建知识库");
+            throw knowledgeNotReady("知识库没有可检索内容，请重新构建知识库");
         }
         return new SearchIndex(buildId, List.copyOf(chunks), Map.copyOf(documentFrequency),
                 (double) totalLength / chunks.size());
@@ -206,6 +207,8 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
     {
         IndexedChunk chunk = scored.chunk();
         KnowledgeSearchResult result = new KnowledgeSearchResult();
+        result.setSourceId(metadata(chunk.metadata(), "sourceId"));
+        result.setCitationId(chunk.id());
         result.setContent(snippet(chunk.content()));
         result.setTitle(metadata(chunk.metadata(), "title"));
         result.setAuthority(metadata(chunk.metadata(), "authority"));
@@ -271,6 +274,11 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
     private static boolean isHan(int codePoint)
     {
         return Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN;
+    }
+
+    private ServiceException knowledgeNotReady(String message)
+    {
+        return new ServiceException(message, AiErrorCode.KNOWLEDGE_NOT_READY.getCode());
     }
 
     private record IndexedChunk(String id, String content, Map<String, Object> metadata,

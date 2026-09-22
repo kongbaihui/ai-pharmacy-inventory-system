@@ -4,12 +4,20 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.ai.AiExpiryBatch;
+import com.ruoyi.system.domain.ai.AiExpiredCleanupCandidate;
 import com.ruoyi.system.domain.ai.AiDemandSnapshot;
+import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.domain.ai.AiInventoryOverview;
 import com.ruoyi.system.domain.ai.AiInventoryOperationsBrief;
 import com.ruoyi.system.domain.ai.AiMedicineStock;
@@ -22,6 +30,7 @@ import com.ruoyi.system.mapper.AiInventoryMapper;
 @Component
 public class AiInventoryTools
 {
+    private static final Logger log = LoggerFactory.getLogger(AiInventoryTools.class);
     private static final int DEFAULT_LIMIT = 10;
     private static final int MAX_LIMIT = 20;
     private static final int DEFAULT_EXPIRY_DAYS = 90;
@@ -43,66 +52,133 @@ public class AiInventoryTools
         this.inventoryMapper = inventoryMapper;
     }
 
-    @Tool(description = "按药品编码、通用名、商品名或批准文号查询当前库存；仅查询，不会修改库存")
     public List<AiMedicineStock> searchMedicineStock(
             @ToolParam(description = "查询关键词；为空时返回部分在用药品", required = false) String keyword,
             @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
     {
+        return searchMedicineStock(keyword, limit, null);
+    }
+
+    @Tool(description = "按药品编码、通用名、商品名或批准文号查询当前库存；仅查询，不会修改库存")
+    public List<AiMedicineStock> searchMedicineStock(
+            @ToolParam(description = "查询关键词；为空时返回部分在用药品", required = false) String keyword,
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit,
+            ToolContext toolContext)
+    {
         String safeKeyword = StringUtils.isBlank(keyword) ? null : keyword.trim();
-        return inventoryMapper.searchMedicineStock(safeKeyword, normalizeLimit(limit));
+        return execute("searchMedicineStock", toolContext,
+                () -> inventoryMapper.searchMedicineStock(safeKeyword, normalizeLimit(limit)), List::size);
+    }
+
+    public List<AiMedicineStock> listLowStock(
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+    {
+        return listLowStock(limit, null);
     }
 
     @Tool(description = "查询当前库存数量低于库存下限的药品；仅查询，不会生成采购单")
     public List<AiMedicineStock> listLowStock(
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit,
+            ToolContext toolContext)
+    {
+        return execute("listLowStock", toolContext,
+                () -> inventoryMapper.selectLowStock(normalizeLimit(limit)), List::size);
+    }
+
+    public List<AiExpiryBatch> listExpiringBatches(
+            @ToolParam(description = "未来天数，范围1到365，默认90", required = false) Integer days,
             @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
     {
-        return inventoryMapper.selectLowStock(normalizeLimit(limit));
+        return listExpiringBatches(days, limit, null);
     }
 
     @Tool(description = "查询从今天起指定天数内到期且仍有剩余库存的批次，不包含已经过期的批次")
     public List<AiExpiryBatch> listExpiringBatches(
             @ToolParam(description = "未来天数，范围1到365，默认90", required = false) Integer days,
-            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit,
+            ToolContext toolContext)
     {
         int safeDays = days == null ? DEFAULT_EXPIRY_DAYS : Math.max(1, Math.min(days, MAX_EXPIRY_DAYS));
-        return inventoryMapper.selectExpiringBatches(safeDays, normalizeLimit(limit));
+        return execute("listExpiringBatches", toolContext,
+                () -> inventoryMapper.selectExpiringBatches(safeDays, normalizeLimit(limit)), List::size);
+    }
+
+    public List<AiExpiredCleanupCandidate> listExpiredCleanupCandidates(
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+    {
+        return listExpiredCleanupCandidates(limit, null);
+    }
+
+    @Tool(description = "查询已经过期且仍有剩余库存的批次及待审核清理申请；仅生成清理提醒，不会创建或确认清理单")
+    public List<AiExpiredCleanupCandidate> listExpiredCleanupCandidates(
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit,
+            ToolContext toolContext)
+    {
+        return execute("listExpiredCleanupCandidates", toolContext,
+                () -> inventoryMapper.selectExpiredCleanupCandidates(normalizeLimit(limit)), List::size);
+    }
+
+    public AiInventoryOverview getInventoryOverview()
+    {
+        return getInventoryOverview(null);
     }
 
     @Tool(description = "获取在用药品数、库存总量、低库存数、积压数、临期批次数和过期批次数的实时总览")
-    public AiInventoryOverview getInventoryOverview()
+    public AiInventoryOverview getInventoryOverview(ToolContext toolContext)
     {
-        return inventoryMapper.selectInventoryOverview();
+        return execute("getInventoryOverview", toolContext,
+                inventoryMapper::selectInventoryOverview, result -> result == null ? 0 : 1);
+    }
+
+    public AiInventoryOperationsBrief getInventoryOperationsBrief(
+            @ToolParam(description = "统计过去天数，范围1到90，默认30", required = false) Integer days,
+            @ToolParam(description = "出库排行条数，范围1到10，默认5", required = false) Integer rankingLimit)
+    {
+        return getInventoryOperationsBrief(days, rankingLimit, null);
     }
 
     @Tool(description = "生成指定时间窗口的结构化库存运营简报，包括出入库量、退库、盘点调整、过期清理、当前风险和出库排行")
     public AiInventoryOperationsBrief getInventoryOperationsBrief(
             @ToolParam(description = "统计过去天数，范围1到90，默认30", required = false) Integer days,
-            @ToolParam(description = "出库排行条数，范围1到10，默认5", required = false) Integer rankingLimit)
+            @ToolParam(description = "出库排行条数，范围1到10，默认5", required = false) Integer rankingLimit,
+            ToolContext toolContext)
     {
         int safeDays = days == null ? DEFAULT_ANALYSIS_DAYS : Math.max(1, Math.min(days, MAX_ANALYSIS_DAYS));
         int safeRankingLimit = rankingLimit == null ? DEFAULT_RANKING_LIMIT
                 : Math.max(1, Math.min(rankingLimit, MAX_RANKING_LIMIT));
-        AiInventoryOperationsBrief brief = inventoryMapper.selectOperationsBrief(safeDays);
-        brief.setAnalysisDays(safeDays);
-        brief.setTopOutbound(inventoryMapper.selectTopOutbound(safeDays, safeRankingLimit));
-        return brief;
+        return execute("getInventoryOperationsBrief", toolContext, () ->
+        {
+            AiInventoryOperationsBrief brief = inventoryMapper.selectOperationsBrief(safeDays);
+            brief.setAnalysisDays(safeDays);
+            brief.setTopOutbound(inventoryMapper.selectTopOutbound(safeDays, safeRankingLimit));
+            return brief;
+        }, result -> result == null ? 0 : 1);
+    }
+
+    public List<AiReplenishmentAdvice> listReplenishmentAdvice(
+            @ToolParam(description = "希望库存覆盖的未来天数，范围7到90，默认30", required = false) Integer coverageDays,
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+    {
+        return listReplenishmentAdvice(coverageDays, limit, null);
     }
 
     @Tool(description = "根据实时可用库存、库存上下限和近30天实际出库量计算补货建议；仅提供建议，不会创建采购或入库单")
     public List<AiReplenishmentAdvice> listReplenishmentAdvice(
             @ToolParam(description = "希望库存覆盖的未来天数，范围7到90，默认30", required = false) Integer coverageDays,
-            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit,
+            ToolContext toolContext)
     {
         int safeCoverageDays = coverageDays == null ? DEFAULT_COVERAGE_DAYS
                 : Math.max(MIN_COVERAGE_DAYS, Math.min(coverageDays, MAX_COVERAGE_DAYS));
-        return inventoryMapper.selectDemandSnapshots(MAX_DEMAND_CANDIDATES).stream()
-                .map(snapshot -> calculateAdvice(snapshot, safeCoverageDays))
-                .filter(advice -> advice.getSuggestedOrderQty() > 0)
-                .sorted(Comparator.comparingInt(this::urgencyRank)
-                        .thenComparing(AiReplenishmentAdvice::getSuggestedOrderQty, Comparator.reverseOrder())
-                        .thenComparing(AiReplenishmentAdvice::getMedId))
-                .limit(normalizeLimit(limit))
-                .toList();
+        return execute("listReplenishmentAdvice", toolContext,
+                () -> inventoryMapper.selectDemandSnapshots(MAX_DEMAND_CANDIDATES).stream()
+                        .map(snapshot -> calculateAdvice(snapshot, safeCoverageDays))
+                        .filter(advice -> advice.getSuggestedOrderQty() > 0)
+                        .sorted(Comparator.comparingInt(this::urgencyRank)
+                                .thenComparing(AiReplenishmentAdvice::getSuggestedOrderQty, Comparator.reverseOrder())
+                                .thenComparing(AiReplenishmentAdvice::getMedId))
+                        .limit(normalizeLimit(limit))
+                        .toList(), List::size);
     }
 
     AiReplenishmentAdvice calculateAdvice(AiDemandSnapshot snapshot, int coverageDays)
@@ -193,5 +269,37 @@ public class AiInventoryTools
     private int normalizeLimit(Integer limit)
     {
         return limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
+    }
+
+    private <T> T execute(String toolName, ToolContext context, Supplier<T> action,
+            ToIntFunction<T> resultCount)
+    {
+        long startedAt = System.nanoTime();
+        try
+        {
+            T result = action.get();
+            log.info("AI tool completed requestId={} tool={} durationMs={} resultCount={}",
+                    requestId(context), toolName, elapsedMillis(startedAt), resultCount.applyAsInt(result));
+            return result;
+        }
+        catch (RuntimeException exception)
+        {
+            log.warn("AI tool failed requestId={} tool={} durationMs={} type={}",
+                    requestId(context), toolName, elapsedMillis(startedAt),
+                    exception.getClass().getSimpleName());
+            throw new ServiceException(AiErrorCode.TOOL_FAILURE.getMessage(),
+                    AiErrorCode.TOOL_FAILURE.getCode());
+        }
+    }
+
+    private String requestId(ToolContext context)
+    {
+        Object value = context == null ? null : context.getContext().get("requestId");
+        return value == null ? "direct" : String.valueOf(value);
+    }
+
+    private long elapsedMillis(long startedAt)
+    {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 }

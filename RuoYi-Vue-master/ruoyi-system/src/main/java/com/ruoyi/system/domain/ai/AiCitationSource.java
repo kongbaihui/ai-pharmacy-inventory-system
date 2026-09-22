@@ -1,25 +1,22 @@
 package com.ruoyi.system.domain.ai;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 返回给 AI 的权威知识命中片段。
+ * 后端确认实际命中的知识来源。
  */
-public class KnowledgeSearchResult
+public class AiCitationSource
 {
     private String sourceId;
-    private String citationId;
-    private String content;
     private String title;
     private String authority;
     private String url;
     private String category;
-    private double relevance;
+    private List<String> citationIds = new ArrayList<>();
 
     public String getSourceId() { return sourceId; }
     public void setSourceId(String sourceId) { this.sourceId = sourceId; }
-    public String getCitationId() { return citationId; }
-    public void setCitationId(String citationId) { this.citationId = citationId; }
-    public String getContent() { return content; }
-    public void setContent(String content) { this.content = content; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getAuthority() { return authority; }
@@ -28,6 +25,6 @@ public class KnowledgeSearchResult
     public void setUrl(String url) { this.url = url; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
-    public double getRelevance() { return relevance; }
-    public void setRelevance(double relevance) { this.relevance = relevance; }
+    public List<String> getCitationIds() { return citationIds; }
+    public void setCitationIds(List<String> citationIds) { this.citationIds = citationIds; }
 }

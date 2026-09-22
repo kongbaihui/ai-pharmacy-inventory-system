@@ -1,7 +1,8 @@
-// 应用全局配置
+// 应用全局配置。正式打包时通过 VUE_APP_BASE_API 指向实际后端。
+const baseUrl = process.env.VUE_APP_BASE_API || 'http://localhost:8080'
+
 module.exports = {
-  baseUrl: 'https://vue.ruoyi.vip/prod-api',
-  // baseUrl: 'http://localhost:8080',
+  baseUrl,
   // 应用信息
   appInfo: {
     // 应用名称

@@ -24,6 +24,9 @@ class AiInventoryMapperXmlTest
                 .contains("com.ruoyi.system.mapper.AiInventoryMapper.searchMedicineStock",
                         "com.ruoyi.system.mapper.AiInventoryMapper.selectLowStock",
                         "com.ruoyi.system.mapper.AiInventoryMapper.selectExpiringBatches",
-                        "com.ruoyi.system.mapper.AiInventoryMapper.selectInventoryOverview");
+                        "com.ruoyi.system.mapper.AiInventoryMapper.selectExpiredCleanupCandidates",
+                        "com.ruoyi.system.mapper.AiInventoryMapper.selectInventoryOverview",
+                        "com.ruoyi.system.mapper.AiInventoryMapper.selectMonthlyMetrics",
+                        "com.ruoyi.system.mapper.AiInventoryMapper.selectMonthlyTopOutbound");
     }
 }

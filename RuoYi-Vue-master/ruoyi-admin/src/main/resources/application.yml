@@ -69,6 +69,12 @@ spring:
         initial-interval: 1s
         multiplier: 2
         max-interval: 8s
+    tools:
+      throw-exception-on-error: true
+      limits:
+        max-calls-per-tool-default: 3
+        max-total-tool-calls: 8
+        on-limit-exceeded: THROW
   # 资源信息
   messages:
     # 国际化资源文件路径
@@ -168,6 +174,7 @@ pharmacy:
       chunk-size: ${AI_KNOWLEDGE_CHUNK_SIZE:1200}
       chunk-overlap: ${AI_KNOWLEDGE_CHUNK_OVERLAP:120}
       minimum-source-count: ${AI_KNOWLEDGE_MIN_SOURCES:10}
+      remote-sources-enabled: ${AI_KNOWLEDGE_REMOTE_SOURCES:true}
 
 # 防止XSS攻击
 xss:

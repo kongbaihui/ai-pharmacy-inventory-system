@@ -78,8 +78,10 @@ class AiChatServiceImplTest
         List<AiChatStreamEvent> events = disabledService().stream(request).collectList().block();
 
         assertThat(events).extracting(AiChatStreamEvent::getType)
-                .containsExactly("meta", "error");
+                .containsExactly("start", "error");
         assertThat(events).allMatch(event -> "session-1".equals(event.getSessionId()));
+        assertThat(events).allMatch(event -> event.getRequestId() != null);
+        assertThat(events.get(1).getCode()).isEqualTo("AI_NOT_CONFIGURED");
         assertThat(events.get(1).getContent()).doesNotContain("Exception");
     }
 
