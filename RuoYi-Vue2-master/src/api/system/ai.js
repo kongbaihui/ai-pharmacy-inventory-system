@@ -36,6 +36,16 @@ export function rebuildKnowledge() {
   })
 }
 
+/** 导入经人工确认的本地知识文件。 */
+export function importKnowledgeDocument(formData) {
+  return request({
+    url: '/system/ai/knowledge/import',
+    method: 'post',
+    data: formData,
+    timeout: 60000
+  })
+}
+
 /** 查询指定自然月的确定性库存指标。 */
 export function getMonthlyInventoryMetrics(month) {
   return request({

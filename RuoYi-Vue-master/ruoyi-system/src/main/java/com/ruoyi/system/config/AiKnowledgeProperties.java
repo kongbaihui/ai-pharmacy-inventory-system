@@ -15,6 +15,7 @@ public class AiKnowledgeProperties
     private int chunkSize = 1200;
     private int chunkOverlap = 120;
     private int minimumSourceCount = 10;
+    private boolean remoteSourcesEnabled = true;
 
     public String getWorkDir() { return workDir; }
     public void setWorkDir(String workDir) { this.workDir = workDir; }
@@ -26,4 +27,6 @@ public class AiKnowledgeProperties
     public void setChunkOverlap(int chunkOverlap) { this.chunkOverlap = chunkOverlap; }
     public int getMinimumSourceCount() { return minimumSourceCount; }
     public void setMinimumSourceCount(int minimumSourceCount) { this.minimumSourceCount = minimumSourceCount; }
+    public boolean isRemoteSourcesEnabled() { return remoteSourcesEnabled; }
+    public void setRemoteSourcesEnabled(boolean remoteSourcesEnabled) { this.remoteSourcesEnabled = remoteSourcesEnabled; }
 }

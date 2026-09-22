@@ -114,6 +114,13 @@
             <el-button
               v-hasPermi="['system:ai:knowledge']"
               size="mini"
+              icon="el-icon-upload2"
+              :disabled="knowledgeRebuilding"
+              @click="handleOpenKnowledgeImport"
+            >导入资料</el-button>
+            <el-button
+              v-hasPermi="['system:ai:knowledge']"
+              size="mini"
               type="primary"
               plain
               icon="el-icon-document-checked"
@@ -147,17 +154,27 @@
                 <span v-if="message.streaming && !message.thinking" class="stream-caret" aria-hidden="true" />
               </div>
               <div v-if="message.sources && message.sources.length" class="source-list">
-                <a
-                  v-for="source in message.sources"
-                  :key="source.sourceId"
-                  :href="source.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="source-card"
-                >
-                  <i class="el-icon-document-checked" />
-                  <span><strong>{{ source.title }}</strong><small>{{ source.authority }}</small></span>
-                </a>
+                <template v-for="source in message.sources">
+                  <a
+                    v-if="source.url"
+                    :key="source.sourceId + '-link'"
+                    :href="source.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="source-card"
+                  >
+                    <i class="el-icon-document-checked" />
+                    <span><strong>{{ source.title }}</strong><small>{{ source.authority }}</small></span>
+                  </a>
+                  <div
+                    v-else
+                    :key="source.sourceId + '-local'"
+                    class="source-card"
+                  >
+                    <i class="el-icon-document-checked" />
+                    <span><strong>{{ source.title }}</strong><small>{{ source.authority }}</small></span>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -238,6 +255,39 @@
       </div>
       <p v-if="reportMetrics" class="metric-basis">{{ reportMetrics.metricBasis }}</p>
     </el-dialog>
+
+    <el-dialog
+      title="导入药房知识资料"
+      :visible.sync="knowledgeImportVisible"
+      width="520px"
+      custom-class="knowledge-import-dialog"
+    >
+      <el-form label-position="top">
+        <el-form-item label="资料文件">
+          <label class="knowledge-file-picker">
+            <input type="file" accept=".pdf,.docx,.txt,.md" @change="handleKnowledgeFileChange">
+            <i class="el-icon-upload2" />
+            <span>{{ knowledgeImport.file ? knowledgeImport.file.name : '选择 PDF、DOCX、TXT 或 Markdown 文件' }}</span>
+          </label>
+        </el-form-item>
+        <el-form-item label="资料标题">
+          <el-input v-model.trim="knowledgeImport.title" maxlength="200" />
+        </el-form-item>
+        <el-form-item label="发布机构">
+          <el-input v-model.trim="knowledgeImport.authority" maxlength="200" placeholder="例如：国家药品监督管理局" />
+        </el-form-item>
+        <el-form-item label="资料分类">
+          <el-input v-model.trim="knowledgeImport.category" maxlength="100" placeholder="例如：药品说明书、药房制度" />
+        </el-form-item>
+        <el-form-item label="公开来源链接（可选）">
+          <el-input v-model.trim="knowledgeImport.sourceUrl" maxlength="1000" placeholder="https://" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button :disabled="knowledgeImporting" @click="knowledgeImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="knowledgeImporting" @click="handleKnowledgeImport">导入资料</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -245,6 +295,7 @@
 import {
   getKnowledgeStatus,
   getMonthlyInventoryMetrics,
+  importKnowledgeDocument,
   rebuildKnowledge,
   streamAiMessage,
   streamMonthlyInventoryReport
@@ -263,6 +314,9 @@ export default {
       knowledgeStatusLoading: false,
       knowledgeRebuilding: false,
       knowledgeStatus: { status: 'loading' },
+      knowledgeImportVisible: false,
+      knowledgeImporting: false,
+      knowledgeImport: { file: null, title: '', authority: '', category: '', sourceUrl: '' },
       reportVisible: false,
       reportLoading: false,
       reportController: null,
@@ -348,6 +402,46 @@ export default {
     if (this.reportController) this.reportController.abort()
   },
   methods: {
+    handleOpenKnowledgeImport() {
+      this.knowledgeImport = { file: null, title: '', authority: '', category: '', sourceUrl: '' }
+      this.knowledgeImportVisible = true
+    },
+    handleKnowledgeFileChange(event) {
+      const file = event.target.files && event.target.files[0]
+      this.knowledgeImport.file = file || null
+      if (file && !this.knowledgeImport.title) {
+        this.knowledgeImport.title = file.name.replace(/\.[^.]+$/, '')
+      }
+    },
+    async handleKnowledgeImport() {
+      const item = this.knowledgeImport
+      if (!item.file || !item.title || !item.authority || !item.category) {
+        this.$modal.msgWarning('请选择文件并填写标题、发布机构和资料分类')
+        return
+      }
+      if (item.file.size > 10 * 1024 * 1024) {
+        this.$modal.msgWarning('单个知识文件不能超过10MB')
+        return
+      }
+      const formData = new FormData()
+      formData.append('file', item.file)
+      formData.append('title', item.title)
+      formData.append('authority', item.authority)
+      formData.append('category', item.category)
+      formData.append('sourceUrl', item.sourceUrl || '')
+      this.knowledgeImporting = true
+      try {
+        const response = await importKnowledgeDocument(formData)
+        this.knowledgeImportVisible = false
+        if (response.data && response.data.duplicate) {
+          this.$modal.msgWarning('该文件内容已经导入，无需重复上传')
+        } else {
+          this.$modal.msgSuccess('资料已导入，请重新构建知识库后使用')
+        }
+      } finally {
+        this.knowledgeImporting = false
+      }
+    },
     handleOpenReport() {
       if (!this.reportMonth) this.reportMonth = new Date().toISOString().slice(0, 7)
       this.reportVisible = true
@@ -402,7 +496,7 @@ export default {
     },
     handleKnowledgeRebuild() {
       if (this.knowledgeRebuilding) return
-      this.$modal.confirm('将从18个权威来源重新下载并构建知识库，过程可能持续数分钟。是否继续？').then(() => {
+      this.$modal.confirm('将从已登记的官方来源和本地资料重新构建知识库，过程可能持续数分钟。是否继续？').then(() => {
         this.knowledgeRebuilding = true
         this.knowledgeStatus = Object.assign({}, this.knowledgeStatus, { status: 'building' })
         rebuildKnowledge()
@@ -1076,6 +1170,31 @@ $line: #dbe5df;
 
   .el-dialog__header { border-bottom: 1px solid $line; }
   .el-dialog__body { padding: 20px 24px 24px; }
+}
+
+::v-deep .knowledge-import-dialog {
+  max-width: calc(100vw - 28px);
+  border-radius: 12px;
+  .el-dialog__body { padding: 14px 24px 4px; }
+  .el-form-item { margin-bottom: 14px; }
+  .el-form-item__label { padding-bottom: 4px; color: #52685f; font-size: 12px; line-height: 1.4; }
+}
+
+.knowledge-file-picker {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px dashed #9eb9ad;
+  border-radius: 8px;
+  color: #3d6959;
+  background: #f3f8f5;
+  cursor: pointer;
+
+  input { display: none; }
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &:hover, &:focus-within { border-color: $green; background: #eaf3ee; }
 }
 
 .report-toolbar {

@@ -174,6 +174,7 @@ pharmacy:
       chunk-size: ${AI_KNOWLEDGE_CHUNK_SIZE:1200}
       chunk-overlap: ${AI_KNOWLEDGE_CHUNK_OVERLAP:120}
       minimum-source-count: ${AI_KNOWLEDGE_MIN_SOURCES:10}
+      remote-sources-enabled: ${AI_KNOWLEDGE_REMOTE_SOURCES:true}
 
 # 防止XSS攻击
 xss:

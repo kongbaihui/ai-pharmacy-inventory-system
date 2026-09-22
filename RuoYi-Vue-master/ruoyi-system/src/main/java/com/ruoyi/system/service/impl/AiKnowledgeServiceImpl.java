@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +37,9 @@ import com.ruoyi.system.ai.knowledge.KnowledgeTextChunker;
 import com.ruoyi.system.config.AiKnowledgeProperties;
 import com.ruoyi.system.domain.ai.KnowledgeBuildResult;
 import com.ruoyi.system.domain.ai.KnowledgeChunk;
+import com.ruoyi.system.domain.ai.KnowledgeImportRequest;
+import com.ruoyi.system.domain.ai.KnowledgeImportResult;
+import com.ruoyi.system.domain.ai.KnowledgeImportedDocument;
 import com.ruoyi.system.domain.ai.KnowledgeSource;
 import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.service.IAiKnowledgeService;
@@ -56,6 +60,8 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
             "medlineplus.gov", "www.medlineplus.gov");
 
     private static final TypeReference<List<KnowledgeSource>> SOURCE_LIST_TYPE = new TypeReference<>() { };
+    private static final TypeReference<List<KnowledgeImportedDocument>> IMPORT_LIST_TYPE = new TypeReference<>() { };
+    private static final Set<String> IMPORT_EXTENSIONS = Set.of(".pdf", ".docx", ".txt", ".md");
 
     private final AiKnowledgeProperties properties;
     private final KnowledgeTextChunker chunker;
@@ -84,7 +90,7 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
 
         try
         {
-            List<KnowledgeSource> sources = loadSources();
+            List<BuildSource> sources = loadSources();
             result.setSourceCount(sources.size());
             Path root = Path.of(properties.getWorkDir()).toAbsolutePath().normalize();
             Path buildDir = root.resolve("builds").resolve(result.getBuildId()).normalize();
@@ -96,11 +102,14 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
             int chunkCount = 0;
             try (var writer = Files.newBufferedWriter(chunksFile, StandardCharsets.UTF_8))
             {
-                for (KnowledgeSource source : sources)
+                for (BuildSource buildSource : sources)
                 {
+                    KnowledgeSource source = buildSource.source();
                     try
                     {
-                        DownloadedSource downloaded = download(source, rawDir);
+                        DownloadedSource downloaded = buildSource.localPath() == null
+                                ? download(source, rawDir)
+                                : copyImported(buildSource, rawDir);
                         String text = extractText(downloaded.path());
                         if (text.length() < 200)
                         {
@@ -176,16 +185,114 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         }
     }
 
-    private List<KnowledgeSource> loadSources() throws IOException
+    @Override
+    public synchronized KnowledgeImportResult importDocument(KnowledgeImportRequest request)
     {
-        List<KnowledgeSource> sources;
-        try (InputStream input = new ClassPathResource("ai/knowledge-sources.json").getInputStream())
+        validateImport(request);
+        try
         {
-            sources = objectMapper.readValue(input, SOURCE_LIST_TYPE);
+            String filename = safeFilename(request.getOriginalFilename());
+            String extension = extension(filename);
+            String checksum = sha256(request.getContent());
+            Path root = knowledgeRoot();
+            Path importDir = root.resolve("imports").normalize();
+            Path filesDir = importDir.resolve("files").normalize();
+            ensureChildPath(root, filesDir);
+            Files.createDirectories(filesDir);
+
+            List<KnowledgeImportedDocument> documents = readImportCatalog(importDir);
+            KnowledgeImportedDocument existing = documents.stream()
+                    .filter(item -> checksum.equals(item.getChecksum()))
+                    .findFirst().orElse(null);
+            if (existing != null)
+            {
+                return importResult(existing, true);
+            }
+
+            String sourceId = "local-" + checksum.substring(0, 16);
+            String storageFilename = sourceId + extension;
+            Path target = filesDir.resolve(storageFilename).normalize();
+            ensureChildPath(filesDir, target);
+            Files.write(target, request.getContent());
+
+            KnowledgeImportedDocument document = new KnowledgeImportedDocument();
+            document.setSourceId(sourceId);
+            document.setStorageFilename(storageFilename);
+            document.setOriginalFilename(filename);
+            document.setTitle(request.getTitle().trim());
+            document.setAuthority(request.getAuthority().trim());
+            document.setCategory(request.getCategory().trim());
+            document.setSourceUrl(StringUtils.isBlank(request.getSourceUrl()) ? "" : request.getSourceUrl().trim());
+            document.setChecksum(checksum);
+            document.setImportedAt(OffsetDateTime.now());
+            documents.add(document);
+            writeJsonAtomic(importDir.resolve("catalog.json"), documents);
+            return importResult(document, false);
         }
-        Set<String> ids = new HashSet<>();
-        for (KnowledgeSource source : sources)
+        catch (ServiceException e)
         {
+            throw e;
+        }
+        catch (Exception e)
+        {
+            throw new ServiceException("知识文件导入失败", AiErrorCode.TOOL_FAILURE.getCode());
+        }
+    }
+
+    @Override
+    public synchronized List<KnowledgeImportedDocument> listImportedDocuments()
+    {
+        try
+        {
+            return List.copyOf(readImportCatalog(knowledgeRoot().resolve("imports")));
+        }
+        catch (IOException e)
+        {
+            throw new ServiceException("知识文件目录读取失败", AiErrorCode.TOOL_FAILURE.getCode());
+        }
+    }
+
+    private List<BuildSource> loadSources() throws IOException
+    {
+        List<BuildSource> sources = new ArrayList<>();
+        if (properties.isRemoteSourcesEnabled())
+        {
+            List<KnowledgeSource> remoteSources;
+            try (InputStream input = new ClassPathResource("ai/knowledge-sources.json").getInputStream())
+            {
+                remoteSources = objectMapper.readValue(input, SOURCE_LIST_TYPE);
+            }
+            for (KnowledgeSource source : remoteSources)
+            {
+                validateUri(URI.create(source.getUrl()));
+                sources.add(new BuildSource(source, null, null));
+            }
+        }
+
+        Path root = knowledgeRoot();
+        Path filesDir = root.resolve("imports").resolve("files").normalize();
+        for (KnowledgeImportedDocument document : readImportCatalog(root.resolve("imports")))
+        {
+            Path localPath = filesDir.resolve(document.getStorageFilename()).normalize();
+            ensureChildPath(filesDir, localPath);
+            if (!Files.isRegularFile(localPath))
+            {
+                throw new IOException("导入文件不存在：" + document.getOriginalFilename());
+            }
+            KnowledgeSource source = new KnowledgeSource();
+            source.setId(document.getSourceId());
+            source.setTitle(document.getTitle());
+            source.setAuthority(document.getAuthority());
+            source.setUrl(document.getSourceUrl());
+            source.setLanguage("zh-CN");
+            source.setCategory(document.getCategory());
+            sources.add(new BuildSource(source, localPath, document.getChecksum()));
+        }
+
+        Set<String> ids = new HashSet<>();
+        for (BuildSource buildSource : sources)
+        {
+            KnowledgeSource source = buildSource.source();
             if (StringUtils.isBlank(source.getId()) || !source.getId().matches("[a-z0-9-]+")
                     || StringUtils.isBlank(source.getTitle()) || StringUtils.isBlank(source.getAuthority()))
             {
@@ -195,7 +302,6 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
             {
                 throw new IOException("知识来源ID重复：" + source.getId());
             }
-            validateUri(URI.create(source.getUrl()));
         }
         return sources;
     }
@@ -242,8 +348,34 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         return new DownloadedSource(target, sha256(bytes));
     }
 
-    private String extractText(Path path)
+    private DownloadedSource copyImported(BuildSource buildSource, Path rawDir) throws Exception
     {
+        Path sourcePath = buildSource.localPath();
+        long size = Files.size(sourcePath);
+        if (size <= 0 || size > properties.getMaxFileSize())
+        {
+            throw new IOException("导入文件大小无效");
+        }
+        byte[] bytes = Files.readAllBytes(sourcePath);
+        String checksum = sha256(bytes);
+        if (!checksum.equals(buildSource.checksum()))
+        {
+            throw new IOException("导入文件校验失败，请重新上传");
+        }
+        Path target = rawDir.resolve(buildSource.source().getId() + extension(sourcePath.getFileName().toString()))
+                .normalize();
+        ensureChildPath(rawDir, target);
+        Files.copy(sourcePath, target, StandardCopyOption.REPLACE_EXISTING);
+        return new DownloadedSource(target, checksum);
+    }
+
+    private String extractText(Path path) throws IOException
+    {
+        String suffix = extension(path.getFileName().toString());
+        if (".txt".equals(suffix) || ".md".equals(suffix))
+        {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        }
         List<Document> documents = new TikaDocumentReader(new FileSystemResource(path)).read();
         return documents.stream()
                 .map(Document::getText)
@@ -291,6 +423,138 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), value);
     }
 
+    private void writeJsonAtomic(Path path, Object value) throws IOException
+    {
+        Files.createDirectories(path.getParent());
+        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), value);
+        try
+        {
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        }
+        catch (AtomicMoveNotSupportedException e)
+        {
+            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private List<KnowledgeImportedDocument> readImportCatalog(Path importDir) throws IOException
+    {
+        Path root = knowledgeRoot();
+        Path catalog = importDir.resolve("catalog.json").normalize();
+        ensureChildPath(root, catalog);
+        if (!Files.isRegularFile(catalog))
+        {
+            return new ArrayList<>();
+        }
+        List<KnowledgeImportedDocument> documents = objectMapper.readValue(catalog.toFile(), IMPORT_LIST_TYPE);
+        if (documents == null)
+        {
+            return new ArrayList<>();
+        }
+        for (KnowledgeImportedDocument document : documents)
+        {
+            if (StringUtils.isBlank(document.getSourceId())
+                    || !document.getSourceId().matches("local-[a-f0-9]{16}")
+                    || StringUtils.isBlank(document.getStorageFilename())
+                    || !document.getStorageFilename().matches("local-[a-f0-9]{16}\\.(pdf|docx|txt|md)"))
+            {
+                throw new IOException("导入知识目录包含无效记录");
+            }
+        }
+        return new ArrayList<>(documents);
+    }
+
+    private void validateImport(KnowledgeImportRequest request)
+    {
+        if (request == null || request.getContent() == null || request.getContent().length == 0)
+        {
+            throw importError("知识文件不能为空");
+        }
+        if (request.getContent().length > properties.getMaxFileSize())
+        {
+            throw importError("知识文件超过大小限制");
+        }
+        String filename = safeFilename(request.getOriginalFilename());
+        if (!IMPORT_EXTENSIONS.contains(extension(filename)))
+        {
+            throw importError("知识文件仅支持PDF、DOCX、TXT或Markdown格式");
+        }
+        validateText(request.getTitle(), 200, "资料标题");
+        validateText(request.getAuthority(), 200, "发布机构");
+        validateText(request.getCategory(), 100, "资料分类");
+        if (StringUtils.isNotBlank(request.getSourceUrl()))
+        {
+            if (request.getSourceUrl().length() > 1000)
+            {
+                throw importError("来源链接过长");
+            }
+            URI uri;
+            try
+            {
+                uri = URI.create(request.getSourceUrl().trim());
+            }
+            catch (IllegalArgumentException e)
+            {
+                throw importError("来源链接格式无效");
+            }
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || StringUtils.isBlank(uri.getHost()))
+            {
+                throw importError("来源链接必须是有效的HTTPS地址");
+            }
+        }
+    }
+
+    private void validateText(String value, int maxLength, String label)
+    {
+        if (StringUtils.isBlank(value) || value.trim().length() > maxLength)
+        {
+            throw importError(label + "不能为空且不能超过" + maxLength + "个字符");
+        }
+    }
+
+    private ServiceException importError(String message)
+    {
+        return new ServiceException(message, AiErrorCode.PARAMETER_ERROR.getCode());
+    }
+
+    private String safeFilename(String value)
+    {
+        if (StringUtils.isBlank(value))
+        {
+            throw importError("知识文件名不能为空");
+        }
+        String normalized = value.replace('\\', '/');
+        String filename = normalized.substring(normalized.lastIndexOf('/') + 1).trim();
+        if (filename.isEmpty() || filename.length() > 240)
+        {
+            throw importError("知识文件名无效");
+        }
+        return filename;
+    }
+
+    private String extension(String filename)
+    {
+        int dot = filename.lastIndexOf('.');
+        return dot < 0 ? "" : filename.substring(dot).toLowerCase(Locale.ROOT);
+    }
+
+    private Path knowledgeRoot()
+    {
+        return Path.of(properties.getWorkDir()).toAbsolutePath().normalize();
+    }
+
+    private KnowledgeImportResult importResult(KnowledgeImportedDocument document, boolean duplicate)
+    {
+        KnowledgeImportResult result = new KnowledgeImportResult();
+        result.setSourceId(document.getSourceId());
+        result.setTitle(document.getTitle());
+        result.setOriginalFilename(document.getOriginalFilename());
+        result.setChecksum(document.getChecksum());
+        result.setDuplicate(duplicate);
+        return result;
+    }
+
     private void validateUri(URI uri) throws IOException
     {
         String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
@@ -333,4 +597,6 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
     }
 
     private record DownloadedSource(Path path, String sha256) { }
+
+    private record BuildSource(KnowledgeSource source, Path localPath, String checksum) { }
 }
