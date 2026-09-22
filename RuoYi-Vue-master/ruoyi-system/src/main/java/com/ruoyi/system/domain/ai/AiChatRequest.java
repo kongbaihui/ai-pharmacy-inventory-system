@@ -5,6 +5,7 @@ import java.util.List;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -19,7 +20,7 @@ public class AiChatRequest
     private String message;
 
     @Size(max = 20, message = "历史消息不能超过20条")
-    private List<@Valid AiChatMessage> history = new ArrayList<>();
+    private List<@NotNull(message = "历史消息不能为空") @Valid AiChatMessage> history = new ArrayList<>();
 
     @Size(max = 64, message = "会话标识不能超过64个字符")
     @Pattern(regexp = "[A-Za-z0-9_-]*", message = "会话标识只能包含字母、数字、-和_")

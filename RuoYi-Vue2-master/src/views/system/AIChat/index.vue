@@ -443,7 +443,10 @@ export default {
       }
     },
     handleOpenReport() {
-      if (!this.reportMonth) this.reportMonth = new Date().toISOString().slice(0, 7)
+      if (!this.reportMonth) {
+        const now = new Date()
+        this.reportMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      }
       this.reportVisible = true
       if (!this.reportMetrics) this.loadReportMetrics()
     },
@@ -590,7 +593,8 @@ export default {
       if (!text || !session || this.sending) return
 
       const now = Date.now()
-      session.messages.push({ role: 'user', content: text, time: now })
+      const userMessage = { role: 'user', content: text, time: now }
+      session.messages.push(userMessage)
       if (session.title === '新的药房任务' || session.title === '新会话') {
         session.title = text.length > 16 ? text.slice(0, 16) + '…' : text
       }
@@ -610,10 +614,28 @@ export default {
       session.messages.push(assistantMessage)
       this.$nextTick(this.scrollToBottom)
 
-      const history = session.messages
-        .filter(message => !message.streaming && !message.localOnly && message.content)
-        .slice(0, -1)
-        .map(message => ({ role: message.role, content: message.content }))
+      const historyPairs = []
+      for (let index = 0; index < session.messages.length - 1; index += 1) {
+        const previousUser = session.messages[index]
+        const previousAssistant = session.messages[index + 1]
+        if (previousUser.role !== 'user' || previousUser.localOnly || !previousUser.content) continue
+        if (previousAssistant.role !== 'assistant' || previousAssistant.streaming || previousAssistant.localOnly || !previousAssistant.content) continue
+        historyPairs.push([
+          { role: previousUser.role, content: previousUser.content.slice(0, 4000) },
+          { role: previousAssistant.role, content: previousAssistant.content.slice(0, 4000) }
+        ])
+        index += 1
+      }
+      const selectedPairs = []
+      let historyLength = 0
+      for (let index = historyPairs.length - 1; index >= 0 && selectedPairs.length < 10; index -= 1) {
+        const pair = historyPairs[index]
+        const pairLength = pair[0].content.length + pair[1].content.length
+        if (historyLength + pairLength > 16000) break
+        selectedPairs.unshift(pair)
+        historyLength += pairLength
+      }
+      const history = selectedPairs.reduce((messages, pair) => messages.concat(pair), [])
 
       this.streamController = typeof AbortController === 'undefined' ? null : new AbortController()
       let serviceError = ''
@@ -641,10 +663,12 @@ export default {
         }, this.streamController ? this.streamController.signal : undefined)
 
         if (!assistantMessage.content) {
+          userMessage.localOnly = true
           assistantMessage.localOnly = true
           assistantMessage.content = 'AI 服务未返回有效内容，请稍后重试。'
         }
       } catch (error) {
+        userMessage.localOnly = true
         assistantMessage.localOnly = true
         if (error && error.name === 'AbortError') {
           if (!assistantMessage.content) assistantMessage.content = '本次生成已停止。'
