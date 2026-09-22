@@ -45,6 +45,14 @@ class AiInventoryToolsTest
     }
 
     @Test
+    void shouldQueryExpiredCleanupCandidatesWithoutWriting()
+    {
+        tools.listExpiredCleanupCandidates(100);
+
+        verify(mapper).selectExpiredCleanupCandidates(20);
+    }
+
+    @Test
     void shouldFallBackToMinimumStockWithoutRecentOutbound()
     {
         AiDemandSnapshot snapshot = snapshot(1L, "布洛芬", 25, 20, 60, 200, 0);

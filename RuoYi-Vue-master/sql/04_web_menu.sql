@@ -185,3 +185,16 @@ WHERE @aiMenuId IS NOT NULL
       SELECT 1 FROM sys_menu
       WHERE parent_id = @aiMenuId AND perms = 'system:ai:knowledge'
   );
+
+INSERT INTO sys_menu
+    (menu_name, parent_id, order_num, path, component, query, route_name,
+     is_frame, is_cache, menu_type, visible, status, perms, icon,
+     create_by, create_time, update_by, update_time, remark)
+SELECT 'AI库存月报', @aiMenuId, 2, '#', '', '', '',
+       1, 0, 'F', '0', '0', 'system:ai:report', '#',
+       'admin', SYSDATE(), '', NULL, '允许查看确定性月报指标并生成AI分析'
+WHERE @aiMenuId IS NOT NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM sys_menu
+      WHERE parent_id = @aiMenuId AND perms = 'system:ai:report'
+  );

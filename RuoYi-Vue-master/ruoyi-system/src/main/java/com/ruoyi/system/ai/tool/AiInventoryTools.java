@@ -9,6 +9,7 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.ai.AiExpiryBatch;
+import com.ruoyi.system.domain.ai.AiExpiredCleanupCandidate;
 import com.ruoyi.system.domain.ai.AiDemandSnapshot;
 import com.ruoyi.system.domain.ai.AiInventoryOverview;
 import com.ruoyi.system.domain.ai.AiInventoryOperationsBrief;
@@ -66,6 +67,13 @@ public class AiInventoryTools
     {
         int safeDays = days == null ? DEFAULT_EXPIRY_DAYS : Math.max(1, Math.min(days, MAX_EXPIRY_DAYS));
         return inventoryMapper.selectExpiringBatches(safeDays, normalizeLimit(limit));
+    }
+
+    @Tool(description = "查询已经过期且仍有剩余库存的批次及待审核清理申请；仅生成清理提醒，不会创建或确认清理单")
+    public List<AiExpiredCleanupCandidate> listExpiredCleanupCandidates(
+            @ToolParam(description = "返回条数，范围1到20", required = false) Integer limit)
+    {
+        return inventoryMapper.selectExpiredCleanupCandidates(normalizeLimit(limit));
     }
 
     @Tool(description = "获取在用药品数、库存总量、低库存数、积压数、临期批次数和过期批次数的实时总览")

@@ -76,6 +76,12 @@
             <span class="status-pill data"><i class="el-icon-connection" />实时库存</span>
             <span class="status-pill source"><i class="el-icon-document-checked" />权威资料</span>
             <el-button
+              v-hasPermi="['system:ai:report']"
+              size="mini"
+              icon="el-icon-data-analysis"
+              @click="handleOpenReport"
+            >库存月报</el-button>
+            <el-button
               size="mini"
               icon="el-icon-delete"
               :disabled="sending || currentMessages.length <= 1"
@@ -178,11 +184,58 @@
         </footer>
       </main>
     </div>
+
+    <el-dialog
+      title="月度库存分析"
+      :visible.sync="reportVisible"
+      width="760px"
+      custom-class="monthly-report-dialog"
+      :close-on-click-modal="!reportLoading"
+    >
+      <div class="report-toolbar">
+        <el-date-picker
+          v-model="reportMonth"
+          type="month"
+          value-format="yyyy-MM"
+          placeholder="选择月份"
+          :clearable="false"
+          :disabled="reportLoading"
+        />
+        <el-button
+          type="primary"
+          icon="el-icon-data-analysis"
+          :loading="reportLoading"
+          @click="handleGenerateReport"
+        >生成月报</el-button>
+      </div>
+
+      <div v-if="reportMetrics" class="report-metrics">
+        <div><small>入库数量</small><strong>{{ reportMetrics.inboundQty || 0 }}</strong></div>
+        <div><small>出库数量</small><strong>{{ reportMetrics.outboundQty || 0 }}</strong></div>
+        <div><small>业务流水</small><strong>{{ reportMetrics.movementCount || 0 }}</strong></div>
+        <div><small>当前过期批次</small><strong>{{ reportMetrics.expiredBatchCount || 0 }}</strong></div>
+      </div>
+
+      <div class="report-copy" aria-live="polite">
+        <div v-if="reportLoading && !reportContent" class="thinking-state">
+          <span /><span /><span /><em>正在核对月度指标</em>
+        </div>
+        <p v-else-if="!reportContent" class="report-empty">选择月份后生成报告，核心数字均来自库存流水。</p>
+        <pre v-else>{{ reportContent }}</pre>
+      </div>
+      <p v-if="reportMetrics" class="metric-basis">{{ reportMetrics.metricBasis }}</p>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { getKnowledgeStatus, rebuildKnowledge, streamAiMessage } from '@/api/system/ai'
+import {
+  getKnowledgeStatus,
+  getMonthlyInventoryMetrics,
+  rebuildKnowledge,
+  streamAiMessage,
+  streamMonthlyInventoryReport
+} from '@/api/system/ai'
 
 const STORAGE_KEY = 'ai_chat_sessions'
 const WELCOME_MESSAGE = '你好，我是药房智能助手。我可以读取实时库存与出入库数据，也可以检索内置的权威药学资料。你可以直接描述需要核对的问题。'
@@ -197,6 +250,12 @@ export default {
       knowledgeStatusLoading: false,
       knowledgeRebuilding: false,
       knowledgeStatus: { status: 'loading' },
+      reportVisible: false,
+      reportLoading: false,
+      reportController: null,
+      reportMonth: '',
+      reportMetrics: null,
+      reportContent: '',
       sessions: [],
       activeSessionId: null,
       quickTasks: [
@@ -273,8 +332,45 @@ export default {
   },
   beforeDestroy() {
     if (this.streamController) this.streamController.abort()
+    if (this.reportController) this.reportController.abort()
   },
   methods: {
+    handleOpenReport() {
+      if (!this.reportMonth) this.reportMonth = new Date().toISOString().slice(0, 7)
+      this.reportVisible = true
+      if (!this.reportMetrics) this.loadReportMetrics()
+    },
+    loadReportMetrics() {
+      if (!this.reportMonth) return Promise.resolve()
+      return getMonthlyInventoryMetrics(this.reportMonth).then(response => {
+        this.reportMetrics = response.data || null
+      })
+    },
+    async handleGenerateReport() {
+      if (!this.reportMonth || this.reportLoading) return
+      this.reportLoading = true
+      this.reportContent = ''
+      this.reportController = typeof AbortController === 'undefined' ? null : new AbortController()
+      let serviceError = ''
+      try {
+        await this.loadReportMetrics()
+        await streamMonthlyInventoryReport(this.reportMonth, event => {
+          if (event.type === 'start' && event.metrics) this.reportMetrics = event.metrics
+          if (event.type === 'delta' && event.content) this.reportContent += event.content
+          if (event.type === 'error') {
+            serviceError = event.content || '月报生成暂不可用，请稍后重试'
+            throw new Error(serviceError)
+          }
+        }, this.reportController ? this.reportController.signal : undefined)
+      } catch (error) {
+        if (!error || error.name !== 'AbortError') {
+          this.$modal.msgError(serviceError || '月报生成暂不可用，请稍后重试')
+        }
+      } finally {
+        this.reportLoading = false
+        this.reportController = null
+      }
+    },
     loadKnowledgeStatus() {
       if (this.knowledgeStatusLoading || this.knowledgeRebuilding) return
       this.knowledgeStatusLoading = true
@@ -930,6 +1026,50 @@ $line: #dbe5df;
   .knowledge-strip { align-items: flex-start; flex-wrap: wrap; }
 }
 
+::v-deep .monthly-report-dialog {
+  max-width: calc(100vw - 28px);
+  border-radius: 12px;
+
+  .el-dialog__header { border-bottom: 1px solid $line; }
+  .el-dialog__body { padding: 20px 24px 24px; }
+}
+
+.report-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.report-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid $line;
+  border-radius: 8px;
+  background: $line;
+
+  div { padding: 12px 14px; background: #f8fbf9; }
+  small, strong { display: block; }
+  small { color: #72857c; font-size: 11px; }
+  strong { margin-top: 4px; color: $green; font-size: 20px; font-weight: 600; }
+}
+
+.report-copy {
+  min-height: 220px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid $line;
+  border-radius: 8px;
+  background: #fbfdfc;
+
+  pre { margin: 0; color: $ink; font: inherit; line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
+}
+
+.report-empty { margin: 76px 0 0; color: #83938c; text-align: center; }
+.metric-basis { margin: 10px 2px 0; color: #82938c; font-size: 10px; line-height: 1.5; }
+
 @media (max-width: 640px) {
   .ai-workbench { padding: 8px; }
   .task-section { grid-template-columns: 1fr; }
@@ -943,5 +1083,6 @@ $line: #dbe5df;
   .composer-context { flex-direction: column; gap: 4px; }
   .composer-actions > span { display: none; }
   .composer-actions { justify-content: flex-end; }
+  .report-metrics { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

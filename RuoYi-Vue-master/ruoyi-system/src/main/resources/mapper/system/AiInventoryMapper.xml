@@ -73,6 +73,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit #{limit}
     </select>
 
+    <select id="selectExpiredCleanupCandidates" resultType="com.ruoyi.system.domain.ai.AiExpiredCleanupCandidate">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               b.batch_id, b.batch_no, b.expire_date,
+               datediff(curdate(), b.expire_date) as expired_days,
+               b.remain_qty, s.supplier_name,
+               case when pending.clean_id is null then false else true end as has_pending_clean,
+               pending.clean_id as pending_clean_id,
+               case when pending.clean_id is not null
+                    then '已有待审核清理申请，请跟进人工审核'
+                    else '立即隔离并停止出库，由药师核查后人工发起退货、销毁或报损' end as suggested_action
+        from med_stock_batch b
+        inner join med_info m on m.med_id = b.med_id
+        left join med_supplier s on s.supplier_id = b.supplier_id
+        left join (
+            select batch_id, min(clean_id) as clean_id
+            from med_expired_clean
+            where clean_status = '0'
+            group by batch_id
+        ) pending on pending.batch_id = b.batch_id
+        where m.status = '0'
+          and b.remain_qty &gt; 0
+          and b.expire_date &lt; curdate()
+        order by b.expire_date, m.med_id, b.batch_id
+        limit #{limit}
+    </select>
+
     <select id="selectInventoryOverview" resultType="com.ruoyi.system.domain.ai.AiInventoryOverview">
         select
             (select count(*) from med_info where status = '0') as medicine_count,
@@ -141,6 +167,41 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           and f.flow_type = '2'
           and f.change_qty &lt; 0
           and f.flow_time &gt;= date_sub(now(), interval #{days} day)
+        group by m.med_id, m.med_code, m.med_name, m.med_spec, m.unit
+        order by outbound_qty desc, m.med_id
+        limit #{limit}
+    </select>
+
+    <select id="selectMonthlyMetrics" resultType="com.ruoyi.system.domain.ai.AiInventoryMonthlyMetrics">
+        select
+            ifnull(sum(case when f.flow_type = '1' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as inbound_qty,
+            ifnull(sum(case when f.flow_type = '2' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as outbound_qty,
+            ifnull(sum(case when f.flow_type = '3' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as return_qty,
+            ifnull(sum(case when f.flow_type = '4' then f.change_qty else 0 end), 0) as adjustment_net_qty,
+            ifnull(sum(case when f.flow_type = '5' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as expired_clean_qty,
+            count(f.flow_id) as movement_count,
+            (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
+              where m.status = '0' and greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+                    &lt; ifnull(m.stock_min, 0)) as low_stock_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
+                and b.expire_date &lt;= date_add(curdate(), interval m.warn_days day)) as expiring_batch_count,
+            (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
+              where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
+        from med_stock_flow f
+        where f.flow_time &gt;= #{periodStart} and f.flow_time &lt; #{periodEnd}
+    </select>
+
+    <select id="selectMonthlyTopOutbound" resultType="com.ruoyi.system.domain.ai.AiOutboundRanking">
+        select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
+               sum(-f.change_qty) as outbound_qty, count(*) as outbound_transactions
+        from med_stock_flow f
+        inner join med_info m on m.med_id = f.med_id
+        where m.status = '0'
+          and f.flow_type = '2'
+          and f.change_qty &lt; 0
+          and f.flow_time &gt;= #{periodStart}
+          and f.flow_time &lt; #{periodEnd}
         group by m.med_id, m.med_code, m.med_name, m.med_spec, m.unit
         order by outbound_qty desc, m.med_id
         limit #{limit}
