@@ -47,6 +47,9 @@ user:
 
 # Spring配置
 spring:
+  config:
+    # 本机密钥放在项目根目录 .env.local（已被 Git 忽略）
+    import: 'optional:file:./.env.local[.properties]'
   ai:
     # 默认关闭，避免未配置密钥时影响普通业务启动；启用时设置 AI_CHAT_PROVIDER=openai
     model:

@@ -1,5 +1,6 @@
 package com.ruoyi.system.domain.ai;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,6 +10,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AiResponseContractTest
 {
+    @Test
+    void expiryDateShouldSerializeAsCalendarDateWithoutTimezoneShift()
+    {
+        AiExpiryBatch batch = new AiExpiryBatch();
+        batch.setExpireDate(LocalDate.of(2026, 11, 30));
+
+        JsonNode json = new ObjectMapper().findAndRegisterModules().valueToTree(batch);
+
+        assertThat(json.get("expireDate").asText()).isEqualTo("2026-11-30");
+    }
+
     @Test
     void ordinaryResponseShouldExposeReplySessionRequestAndVerifiedSources() throws Exception
     {

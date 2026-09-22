@@ -38,6 +38,17 @@ class AiChatRequestValidationTest
                 .contains("历史消息总字符不能超过16000");
     }
 
+    @Test
+    void shouldRejectNullHistoryMessage()
+    {
+        AiChatRequest request = validRequest();
+        request.setHistory(java.util.Collections.singletonList(null));
+
+        assertThat(validator.validate(request))
+                .extracting(violation -> violation.getMessage())
+                .contains("历史消息不能为空");
+    }
+
     private AiChatRequest validRequest()
     {
         AiChatRequest request = new AiChatRequest();

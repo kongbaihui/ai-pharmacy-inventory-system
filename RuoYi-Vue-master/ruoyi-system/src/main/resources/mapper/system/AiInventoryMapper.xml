@@ -22,20 +22,120 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="stockStatus" column="stock_status" />
     </resultMap>
 
+    <resultMap type="com.ruoyi.system.domain.ai.AiExpiryBatch" id="AiExpiryBatchResult">
+        <result property="medId" column="med_id" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="batchNo" column="batch_no" />
+        <result property="expireDate" column="expire_date" />
+        <result property="remainDays" column="remain_days" />
+        <result property="remainQty" column="remain_qty" />
+        <result property="supplierName" column="supplier_name" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiExpiredCleanupCandidate" id="AiExpiredCleanupCandidateResult">
+        <result property="medId" column="med_id" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="batchId" column="batch_id" />
+        <result property="batchNo" column="batch_no" />
+        <result property="expireDate" column="expire_date" />
+        <result property="expiredDays" column="expired_days" />
+        <result property="remainQty" column="remain_qty" />
+        <result property="supplierName" column="supplier_name" />
+        <result property="hasPendingClean" column="has_pending_clean" />
+        <result property="pendingCleanId" column="pending_clean_id" />
+        <result property="suggestedAction" column="suggested_action" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiInventoryOverview" id="AiInventoryOverviewResult">
+        <result property="medicineCount" column="medicine_count" />
+        <result property="stockQty" column="stock_qty" />
+        <result property="lowStockCount" column="low_stock_count" />
+        <result property="overstockCount" column="overstock_count" />
+        <result property="expiringBatchCount" column="expiring_batch_count" />
+        <result property="expiredBatchCount" column="expired_batch_count" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiDemandSnapshot" id="AiDemandSnapshotResult">
+        <result property="medId" column="med_id" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="currentQty" column="current_qty" />
+        <result property="availableQty" column="available_qty" />
+        <result property="stockMin" column="stock_min" />
+        <result property="stockMax" column="stock_max" />
+        <result property="outboundQty30d" column="outbound_qty_30d" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiInventoryOperationsBrief" id="AiInventoryOperationsBriefResult">
+        <result property="inboundQty" column="inbound_qty" />
+        <result property="outboundQty" column="outbound_qty" />
+        <result property="returnQty" column="return_qty" />
+        <result property="adjustmentNetQty" column="adjustment_net_qty" />
+        <result property="expiredCleanQty" column="expired_clean_qty" />
+        <result property="movementCount" column="movement_count" />
+        <result property="lowStockCount" column="low_stock_count" />
+        <result property="expiringBatchCount" column="expiring_batch_count" />
+        <result property="expiredBatchCount" column="expired_batch_count" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiOutboundRanking" id="AiOutboundRankingResult">
+        <result property="medId" column="med_id" />
+        <result property="medCode" column="med_code" />
+        <result property="medName" column="med_name" />
+        <result property="medSpec" column="med_spec" />
+        <result property="unit" column="unit" />
+        <result property="outboundQty" column="outbound_qty" />
+        <result property="outboundTransactions" column="outbound_transactions" />
+    </resultMap>
+
+    <resultMap type="com.ruoyi.system.domain.ai.AiInventoryMonthlyMetrics" id="AiInventoryMonthlyMetricsResult">
+        <result property="inboundQty" column="inbound_qty" />
+        <result property="outboundQty" column="outbound_qty" />
+        <result property="returnQty" column="return_qty" />
+        <result property="adjustmentNetQty" column="adjustment_net_qty" />
+        <result property="expiredCleanQty" column="expired_clean_qty" />
+        <result property="movementCount" column="movement_count" />
+        <result property="lowStockCount" column="low_stock_count" />
+        <result property="expiringBatchCount" column="expiring_batch_count" />
+        <result property="expiredBatchCount" column="expired_batch_count" />
+    </resultMap>
+
+    <sql id="expiredStockJoin">
+        left join (
+            select med_id, sum(remain_qty) as expired_qty
+            from med_stock_batch
+            where remain_qty &gt; 0 and expire_date &lt; curdate()
+            group by med_id
+        ) expired on expired.med_id = m.med_id
+    </sql>
+
+    <sql id="availableStockQty">
+        greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0) - ifnull(expired.expired_qty, 0), 0)
+    </sql>
+
     <sql id="medicineStockColumns">
         select m.med_id, m.med_code, m.med_name, m.trade_name, m.med_spec, m.unit,
                c.category_name, m.manufacturer, m.approval_no, m.storage_cond,
                ifnull(st.total_qty, 0) as stock_qty,
-               greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0) as available_qty,
+               <include refid="availableStockQty" /> as available_qty,
                m.stock_min, m.stock_max,
                case
-                   when ifnull(st.total_qty, 0) &lt; m.stock_min then '库存不足'
+                   when <include refid="availableStockQty" /> &lt; m.stock_min then '库存不足'
                    when m.stock_max &gt; 0 and ifnull(st.total_qty, 0) &gt; m.stock_max then '库存积压'
                    else '正常'
                end as stock_status
         from med_info m
         left join med_category c on c.category_id = m.category_id
         left join med_stock st on st.med_id = m.med_id
+        <include refid="expiredStockJoin" />
     </sql>
 
     <select id="searchMedicineStock" resultMap="AiMedicineStockResult">
@@ -53,12 +153,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectLowStock" resultMap="AiMedicineStockResult">
         <include refid="medicineStockColumns" />
-        where m.status = '0' and ifnull(st.total_qty, 0) &lt; m.stock_min
-        order by (m.stock_min - ifnull(st.total_qty, 0)) desc, m.med_id
+        where m.status = '0' and <include refid="availableStockQty" /> &lt; m.stock_min
+        order by (m.stock_min - <include refid="availableStockQty" />) desc, m.med_id
         limit #{limit}
     </select>
 
-    <select id="selectExpiringBatches" resultType="com.ruoyi.system.domain.ai.AiExpiryBatch">
+    <select id="selectExpiringBatches" resultMap="AiExpiryBatchResult">
         select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
                b.batch_no, b.expire_date, datediff(b.expire_date, curdate()) as remain_days,
                b.remain_qty, s.supplier_name
@@ -73,7 +173,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit #{limit}
     </select>
 
-    <select id="selectExpiredCleanupCandidates" resultType="com.ruoyi.system.domain.ai.AiExpiredCleanupCandidate">
+    <select id="selectExpiredCleanupCandidates" resultMap="AiExpiredCleanupCandidateResult">
         select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
                b.batch_id, b.batch_no, b.expire_date,
                datediff(curdate(), b.expire_date) as expired_days,
@@ -99,13 +199,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit #{limit}
     </select>
 
-    <select id="selectInventoryOverview" resultType="com.ruoyi.system.domain.ai.AiInventoryOverview">
+    <select id="selectInventoryOverview" resultMap="AiInventoryOverviewResult">
         select
             (select count(*) from med_info where status = '0') as medicine_count,
             (select ifnull(sum(st.total_qty), 0)
                from med_stock st inner join med_info m on m.med_id = st.med_id where m.status = '0') as stock_qty,
             (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
-              where m.status = '0' and ifnull(st.total_qty, 0) &lt; m.stock_min) as low_stock_count,
+              <include refid="expiredStockJoin" />
+              where m.status = '0' and <include refid="availableStockQty" /> &lt; m.stock_min) as low_stock_count,
             (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
               where m.status = '0' and m.stock_max &gt; 0 and ifnull(st.total_qty, 0) &gt; m.stock_max) as overstock_count,
             (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
@@ -115,14 +216,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &lt; curdate()) as expired_batch_count
     </select>
 
-    <select id="selectDemandSnapshots" resultType="com.ruoyi.system.domain.ai.AiDemandSnapshot">
+    <select id="selectDemandSnapshots" resultMap="AiDemandSnapshotResult">
         select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
                ifnull(st.total_qty, 0) as current_qty,
-               greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0) as available_qty,
+               <include refid="availableStockQty" /> as available_qty,
                ifnull(m.stock_min, 0) as stock_min, ifnull(m.stock_max, 0) as stock_max,
                ifnull(outflow.outbound_qty_30d, 0) as outbound_qty_30d
         from med_info m
         left join med_stock st on st.med_id = m.med_id
+        <include refid="expiredStockJoin" />
         left join (
             select med_id, sum(-change_qty) as outbound_qty_30d
             from med_stock_flow
@@ -132,13 +234,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             group by med_id
         ) outflow on outflow.med_id = m.med_id
         where m.status = '0'
-        order by (greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+        order by (<include refid="availableStockQty" />
                   &lt; ifnull(m.stock_min, 0)) desc,
                  ifnull(outflow.outbound_qty_30d, 0) desc, m.med_id
         limit #{limit}
     </select>
 
-    <select id="selectOperationsBrief" resultType="com.ruoyi.system.domain.ai.AiInventoryOperationsBrief">
+    <select id="selectOperationsBrief" resultMap="AiInventoryOperationsBriefResult">
         select
             ifnull(sum(case when f.flow_type = '1' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as inbound_qty,
             ifnull(sum(case when f.flow_type = '2' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as outbound_qty,
@@ -147,7 +249,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ifnull(sum(case when f.flow_type = '5' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as expired_clean_qty,
             count(f.flow_id) as movement_count,
             (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
-              where m.status = '0' and greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+              <include refid="expiredStockJoin" />
+              where m.status = '0' and <include refid="availableStockQty" />
                     &lt; ifnull(m.stock_min, 0)) as low_stock_count,
             (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
               where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
@@ -158,7 +261,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where f.flow_time &gt;= date_sub(now(), interval #{days} day)
     </select>
 
-    <select id="selectTopOutbound" resultType="com.ruoyi.system.domain.ai.AiOutboundRanking">
+    <select id="selectTopOutbound" resultMap="AiOutboundRankingResult">
         select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
                sum(-f.change_qty) as outbound_qty, count(*) as outbound_transactions
         from med_stock_flow f
@@ -172,7 +275,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit #{limit}
     </select>
 
-    <select id="selectMonthlyMetrics" resultType="com.ruoyi.system.domain.ai.AiInventoryMonthlyMetrics">
+    <select id="selectMonthlyMetrics" resultMap="AiInventoryMonthlyMetricsResult">
         select
             ifnull(sum(case when f.flow_type = '1' and f.change_qty &gt; 0 then f.change_qty else 0 end), 0) as inbound_qty,
             ifnull(sum(case when f.flow_type = '2' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as outbound_qty,
@@ -181,7 +284,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ifnull(sum(case when f.flow_type = '5' and f.change_qty &lt; 0 then -f.change_qty else 0 end), 0) as expired_clean_qty,
             count(f.flow_id) as movement_count,
             (select count(*) from med_info m left join med_stock st on st.med_id = m.med_id
-              where m.status = '0' and greatest(ifnull(st.total_qty, 0) - ifnull(st.lock_qty, 0), 0)
+              <include refid="expiredStockJoin" />
+              where m.status = '0' and <include refid="availableStockQty" />
                     &lt; ifnull(m.stock_min, 0)) as low_stock_count,
             (select count(*) from med_stock_batch b inner join med_info m on m.med_id = b.med_id
               where m.status = '0' and b.remain_qty &gt; 0 and b.expire_date &gt;= curdate()
@@ -192,7 +296,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where f.flow_time &gt;= #{periodStart} and f.flow_time &lt; #{periodEnd}
     </select>
 
-    <select id="selectMonthlyTopOutbound" resultType="com.ruoyi.system.domain.ai.AiOutboundRanking">
+    <select id="selectMonthlyTopOutbound" resultMap="AiOutboundRankingResult">
         select m.med_id, m.med_code, m.med_name, m.med_spec, m.unit,
                sum(-f.change_qty) as outbound_qty, count(*) as outbound_transactions
         from med_stock_flow f
