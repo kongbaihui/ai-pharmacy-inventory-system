@@ -12,6 +12,24 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ai_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      RUN_AI_DB_INTEGRATION: "true"
+      AI_TEST_DB_URL: jdbc:mysql://127.0.0.1:3306/ai_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      AI_TEST_DB_USER: root
+      AI_TEST_DB_PASSWORD: root
     defaults:
       run:
         working-directory: RuoYi-Vue-master
