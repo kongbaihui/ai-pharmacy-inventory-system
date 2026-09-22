@@ -4,12 +4,16 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.system.ai.tool.AiInventoryTools;
 import com.ruoyi.system.domain.ai.AiInventoryMonthlyMetrics;
 import com.ruoyi.system.domain.ai.AiOutboundRanking;
+import com.ruoyi.system.domain.ai.AiReportStreamEvent;
 import com.ruoyi.system.mapper.AiInventoryMapper;
+import reactor.core.publisher.Flux;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,5 +80,38 @@ class AiInventoryReportServiceImplTest
 
         assertThat(result.isHasBusinessData()).isFalse();
         assertThat(result.getTopOutbound()).isEmpty();
+    }
+
+    @Test
+    void shouldKeepStandaloneNewlineChunksInReportStream()
+    {
+        ChatClient.Builder builder = mock(ChatClient.Builder.class, Answers.RETURNS_SELF);
+        ChatClient chatClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec requestSpec =
+                mock(ChatClient.ChatClientRequestSpec.class, Answers.RETURNS_SELF);
+        ChatClient.StreamResponseSpec responseSpec = mock(ChatClient.StreamResponseSpec.class);
+        when(builderProvider.getIfAvailable()).thenReturn(builder);
+        when(builder.build()).thenReturn(chatClient);
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.stream()).thenReturn(responseSpec);
+        when(responseSpec.content()).thenReturn(Flux.just("# 月报", "\n\n", "## 概览"));
+
+        AiInventoryMonthlyMetrics aggregate = new AiInventoryMonthlyMetrics();
+        aggregate.setMovementCount(0L);
+        when(mapper.selectMonthlyMetrics(any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(aggregate);
+        when(mapper.selectMonthlyTopOutbound(any(LocalDateTime.class), any(LocalDateTime.class), eq(5)))
+                .thenReturn(List.of());
+        when(mapper.selectExpiredCleanupCandidates(10)).thenReturn(List.of());
+        when(mapper.selectDemandSnapshots(500)).thenReturn(List.of());
+
+        AiInventoryReportServiceImpl service = new AiInventoryReportServiceImpl(
+                builderProvider, mapper, new AiInventoryTools(mapper), new ObjectMapper().findAndRegisterModules());
+        List<AiReportStreamEvent> events = service.streamReport(YearMonth.of(2026, 8))
+                .collectList().block();
+
+        assertThat(events).filteredOn(event -> "delta".equals(event.getType()))
+                .extracting(AiReportStreamEvent::getContent)
+                .containsExactly("# 月报", "\n\n", "## 概览");
     }
 }

@@ -33,7 +33,9 @@ public class AiInventoryReportServiceImpl implements IAiInventoryReportService
             你是医院药品库存分析助手。只能解释用户提供的JSON指标，不得新增、推测或修改数字。
             报告固定包含：概览、进销情况、库存风险、重点药品、补货建议、过期清理建议、结论。
             若hasBusinessData为false，明确写“本月无业务数据”，但可以说明当前风险快照。
-            使用简洁中文Markdown；不得声称已执行采购、清理或库存修改。
+            使用简洁、合法的中文Markdown；每个标题必须单独成行并写成“# 标题”或“## 标题”，
+            标题、正文、列表和表格之间各保留一个空行，列表标记后保留空格，表格每行独占一行。
+            不要输出HTML；不得声称已执行采购、清理或库存修改。
             """;
 
     private final ChatClient reportClient;
@@ -101,7 +103,7 @@ public class AiInventoryReportServiceImpl implements IAiInventoryReportService
             Flux<AiReportStreamEvent> deltas = reportClient.prompt()
                     .user("请根据以下确定性指标生成" + month + "库存月报：\n" + input)
                     .stream().content()
-                    .filter(content -> content != null && !content.isBlank())
+                    .filter(content -> content != null && !content.isEmpty())
                     .map(content -> event("delta", content, requestId, null));
             return Flux.concat(Flux.just(start), deltas,
                     Flux.just(event("done", null, requestId, null)))
