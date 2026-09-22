@@ -206,6 +206,8 @@ public class AiKnowledgeSearchServiceImpl implements IAiKnowledgeSearchService
     {
         IndexedChunk chunk = scored.chunk();
         KnowledgeSearchResult result = new KnowledgeSearchResult();
+        result.setSourceId(metadata(chunk.metadata(), "sourceId"));
+        result.setCitationId(chunk.id());
         result.setContent(snippet(chunk.content()));
         result.setTitle(metadata(chunk.metadata(), "title"));
         result.setAuthority(metadata(chunk.metadata(), "authority"));

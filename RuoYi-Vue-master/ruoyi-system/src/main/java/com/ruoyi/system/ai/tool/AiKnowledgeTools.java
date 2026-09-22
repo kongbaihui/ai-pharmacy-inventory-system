@@ -1,9 +1,11 @@
 package com.ruoyi.system.ai.tool;
 
 import java.util.List;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+import com.ruoyi.system.domain.ai.AiCitationCollector;
 import com.ruoyi.system.domain.ai.KnowledgeSearchResult;
 import com.ruoyi.system.service.IAiKnowledgeSearchService;
 
@@ -26,9 +28,17 @@ public class AiKnowledgeTools
     @Tool(description = "检索已构建的政府、WHO和NIH权威药学资料；回答法规、储存、配送、合理用药或药品信息问题前应调用，并引用返回的机构和原始链接")
     public List<KnowledgeSearchResult> searchAuthoritativeKnowledge(
             @ToolParam(description = "需要检索的完整问题或关键词") String query,
-            @ToolParam(description = "返回条数，范围1到6，默认4", required = false) Integer limit)
+            @ToolParam(description = "返回条数，范围1到6，默认4", required = false) Integer limit,
+            ToolContext toolContext)
     {
         int safeLimit = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
-        return searchService.search(query, safeLimit);
+        List<KnowledgeSearchResult> results = searchService.search(query, safeLimit);
+        Object value = toolContext == null ? null
+                : toolContext.getContext().get(AiCitationCollector.CONTEXT_KEY);
+        if (value instanceof AiCitationCollector collector)
+        {
+            collector.record(results);
+        }
+        return results;
     }
 }

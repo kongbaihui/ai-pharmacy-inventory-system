@@ -146,6 +146,19 @@
                 <template v-else>{{ message.content }}</template>
                 <span v-if="message.streaming && !message.thinking" class="stream-caret" aria-hidden="true" />
               </div>
+              <div v-if="message.sources && message.sources.length" class="source-list">
+                <a
+                  v-for="source in message.sources"
+                  :key="source.sourceId"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="source-card"
+                >
+                  <i class="el-icon-document-checked" />
+                  <span><strong>{{ source.title }}</strong><small>{{ source.authority }}</small></span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -494,6 +507,8 @@ export default {
       const assistantMessage = {
         role: 'assistant',
         content: '',
+        requestId: '',
+        sources: [],
         thinking: true,
         streaming: true,
         time: Date.now()
@@ -516,6 +531,7 @@ export default {
           sessionId: session.remoteSessionId || session.id
         }, event => {
           if (event.sessionId) this.$set(session, 'remoteSessionId', event.sessionId)
+          if (event.requestId) assistantMessage.requestId = event.requestId
           if (event.type === 'delta' && event.content) {
             assistantMessage.thinking = false
             assistantMessage.content += event.content
@@ -524,6 +540,9 @@ export default {
           if (event.type === 'error') {
             serviceError = event.content || 'AI 服务暂不可用，请稍后重试'
             throw new Error(serviceError)
+          }
+          if (event.type === 'sources' && Array.isArray(event.sources)) {
+            assistantMessage.sources = event.sources
           }
         }, this.streamController ? this.streamController.signal : undefined)
 
@@ -1024,6 +1043,31 @@ $line: #dbe5df;
   .session-section, .source-note { display: none; }
   .conversation-panel { min-height: 720px; }
   .knowledge-strip { align-items: flex-start; flex-wrap: wrap; }
+}
+
+.source-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.source-card {
+  display: flex;
+  max-width: 560px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #cbdcd4;
+  border-radius: 7px;
+  color: #315c4e;
+  background: #f1f7f4;
+  text-decoration: none;
+
+  > i { margin-top: 2px; }
+  span, strong, small { display: block; }
+  strong { font-size: 11px; font-weight: 600; }
+  small { margin-top: 2px; color: #71857c; font-size: 10px; }
+  &:hover, &:focus { border-color: #7eaa98; outline: none; background: #e8f2ed; }
 }
 
 ::v-deep .monthly-report-dialog {
