@@ -37,6 +37,7 @@ import com.ruoyi.system.config.AiKnowledgeProperties;
 import com.ruoyi.system.domain.ai.KnowledgeBuildResult;
 import com.ruoyi.system.domain.ai.KnowledgeChunk;
 import com.ruoyi.system.domain.ai.KnowledgeSource;
+import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.service.IAiKnowledgeService;
 
 /**
@@ -130,7 +131,8 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
                 result.setStatus("failed");
                 writeJson(buildDir.resolve("manifest.json"), result);
                 throw new ServiceException("知识库有效来源不足：成功 " + result.getSuccessCount()
-                        + "，最低要求 " + properties.getMinimumSourceCount());
+                        + "，最低要求 " + properties.getMinimumSourceCount(),
+                        AiErrorCode.KNOWLEDGE_NOT_READY.getCode());
             }
 
             result.setStatus(result.getFailedCount() == 0 ? "ready" : "partial");
@@ -144,7 +146,8 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         }
         catch (Exception e)
         {
-            throw new ServiceException("知识库构建失败：" + safeError(e));
+            throw new ServiceException("知识库构建失败：" + safeError(e),
+                    AiErrorCode.TOOL_FAILURE.getCode());
         }
     }
 
@@ -169,7 +172,7 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         }
         catch (Exception e)
         {
-            throw new ServiceException("知识库状态读取失败");
+            throw new ServiceException("知识库状态读取失败", AiErrorCode.KNOWLEDGE_NOT_READY.getCode());
         }
     }
 

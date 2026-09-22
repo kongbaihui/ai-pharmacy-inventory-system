@@ -1,6 +1,8 @@
 package com.ruoyi.system.ai.tool;
 
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -15,6 +17,7 @@ import com.ruoyi.system.service.IAiKnowledgeSearchService;
 @Component
 public class AiKnowledgeTools
 {
+    private static final Logger log = LoggerFactory.getLogger(AiKnowledgeTools.class);
     private static final int DEFAULT_LIMIT = 4;
     private static final int MAX_LIMIT = 6;
 
@@ -31,6 +34,7 @@ public class AiKnowledgeTools
             @ToolParam(description = "返回条数，范围1到6，默认4", required = false) Integer limit,
             ToolContext toolContext)
     {
+        long startedAt = System.nanoTime();
         int safeLimit = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAX_LIMIT));
         List<KnowledgeSearchResult> results = searchService.search(query, safeLimit);
         Object value = toolContext == null ? null
@@ -39,6 +43,19 @@ public class AiKnowledgeTools
         {
             collector.record(results);
         }
+        log.info("AI tool completed requestId={} tool=searchAuthoritativeKnowledge durationMs={} resultCount={}",
+                requestId(toolContext), elapsedMillis(startedAt), results.size());
         return results;
+    }
+
+    private String requestId(ToolContext context)
+    {
+        Object value = context == null ? null : context.getContext().get("requestId");
+        return value == null ? "direct" : String.valueOf(value);
+    }
+
+    private long elapsedMillis(long startedAt)
+    {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 }

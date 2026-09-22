@@ -11,9 +11,11 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.ai.tool.AiInventoryTools;
 import com.ruoyi.system.domain.ai.AiInventoryMonthlyMetrics;
 import com.ruoyi.system.domain.ai.AiReportStreamEvent;
+import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.mapper.AiInventoryMapper;
 import com.ruoyi.system.service.IAiInventoryReportService;
 import reactor.core.publisher.Flux;
@@ -52,23 +54,33 @@ public class AiInventoryReportServiceImpl implements IAiInventoryReportService
     @Override
     public AiInventoryMonthlyMetrics getMonthlyMetrics(YearMonth month)
     {
-        LocalDateTime start = month.atDay(1).atStartOfDay();
-        LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
-        AiInventoryMonthlyMetrics metrics = inventoryMapper.selectMonthlyMetrics(start, end);
-        if (metrics == null)
+        try
         {
-            metrics = new AiInventoryMonthlyMetrics();
+            LocalDateTime start = month.atDay(1).atStartOfDay();
+            LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
+            AiInventoryMonthlyMetrics metrics = inventoryMapper.selectMonthlyMetrics(start, end);
+            if (metrics == null)
+            {
+                metrics = new AiInventoryMonthlyMetrics();
+            }
+            metrics.setMonth(month.toString());
+            metrics.setPeriodStart(start);
+            metrics.setPeriodEndExclusive(end);
+            metrics.setGeneratedAt(LocalDateTime.now());
+            metrics.setMetricBasis(METRIC_BASIS);
+            metrics.setHasBusinessData(value(metrics.getMovementCount()) > 0);
+            metrics.setTopOutbound(safeList(inventoryMapper.selectMonthlyTopOutbound(start, end, 5)));
+            metrics.setExpiredCleanupCandidates(inventoryTools.listExpiredCleanupCandidates(10));
+            metrics.setReplenishmentAdvice(inventoryTools.listReplenishmentAdvice(30, 10));
+            return metrics;
         }
-        metrics.setMonth(month.toString());
-        metrics.setPeriodStart(start);
-        metrics.setPeriodEndExclusive(end);
-        metrics.setGeneratedAt(LocalDateTime.now());
-        metrics.setMetricBasis(METRIC_BASIS);
-        metrics.setHasBusinessData(value(metrics.getMovementCount()) > 0);
-        metrics.setTopOutbound(safeList(inventoryMapper.selectMonthlyTopOutbound(start, end, 5)));
-        metrics.setExpiredCleanupCandidates(inventoryTools.listExpiredCleanupCandidates(10));
-        metrics.setReplenishmentAdvice(inventoryTools.listReplenishmentAdvice(30, 10));
-        return metrics;
+        catch (RuntimeException exception)
+        {
+            log.warn("Monthly inventory metrics failed month={} type={}", month,
+                    exception.getClass().getSimpleName());
+            throw new ServiceException(AiErrorCode.REPORT_DATA_ERROR.getMessage(),
+                    AiErrorCode.REPORT_DATA_ERROR.getCode());
+        }
     }
 
     @Override

@@ -12,6 +12,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.model.tool.ToolCallLimitExceededException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -24,6 +25,7 @@ import com.ruoyi.system.domain.ai.AiChatRequest;
 import com.ruoyi.system.domain.ai.AiChatResponse;
 import com.ruoyi.system.domain.ai.AiChatStreamEvent;
 import com.ruoyi.system.domain.ai.AiCitationCollector;
+import com.ruoyi.system.domain.ai.AiErrorCode;
 import com.ruoyi.system.service.IAiChatService;
 
 /**
@@ -66,7 +68,7 @@ public class AiChatServiceImpl implements IAiChatService
         String requestId = UUID.randomUUID().toString();
         if (chatClient == null)
         {
-            throw new ServiceException("AI 服务未启用，请配置 AI_CHAT_PROVIDER 和 AI_CHAT_API_KEY");
+            throw serviceException(AiErrorCode.AI_NOT_CONFIGURED);
         }
 
         try
@@ -75,12 +77,12 @@ public class AiChatServiceImpl implements IAiChatService
             String reply = chatClient.prompt()
                     .messages(buildHistoryMessages(request))
                     .user(request.getMessage().trim())
-                    .toolContext(Map.of(AiCitationCollector.CONTEXT_KEY, collector))
+                    .toolContext(Map.of(AiCitationCollector.CONTEXT_KEY, collector, "requestId", requestId))
                     .call()
                     .content();
             if (StringUtils.isBlank(reply))
             {
-                throw new ServiceException("AI 服务未返回有效内容，请稍后重试");
+                throw serviceException(AiErrorCode.EMPTY_RESPONSE);
             }
             String sessionId = resolveSessionId(request);
             return new AiChatResponse(reply, sessionId, requestId, collector.snapshot());
@@ -92,7 +94,7 @@ public class AiChatServiceImpl implements IAiChatService
         catch (RuntimeException e)
         {
             log.warn("AI chat request failed requestId={} type={}", requestId, e.getClass().getSimpleName());
-            throw new ServiceException("AI 服务暂不可用，请稍后重试");
+            throw serviceException(classify(e));
         }
     }
 
@@ -106,7 +108,7 @@ public class AiChatServiceImpl implements IAiChatService
         if (chatClient == null)
         {
             return Flux.just(metadata, event("error", "AI 服务未启用，请联系管理员完成配置",
-                    sessionId, requestId, "AI_NOT_CONFIGURED"));
+                    sessionId, requestId, AiErrorCode.AI_NOT_CONFIGURED.getKey()));
         }
 
         return Flux.concat(Flux.just(metadata), Flux.defer(() ->
@@ -115,7 +117,7 @@ public class AiChatServiceImpl implements IAiChatService
             Flux<AiChatStreamEvent> deltas = chatClient.prompt()
                     .messages(buildHistoryMessages(request))
                     .user(request.getMessage().trim())
-                    .toolContext(Map.of(AiCitationCollector.CONTEXT_KEY, collector))
+                    .toolContext(Map.of(AiCitationCollector.CONTEXT_KEY, collector, "requestId", requestId))
                     .stream()
                     .content()
                     .filter(StringUtils::isNotBlank)
@@ -124,14 +126,15 @@ public class AiChatServiceImpl implements IAiChatService
             Flux<AiChatStreamEvent> completion = Flux.defer(() -> hasContent.get()
                     ? completionEvents(sessionId, requestId, collector)
                     : Flux.just(event("error", "AI 服务未返回有效内容，请稍后重试",
-                            sessionId, requestId, "EMPTY_RESPONSE")));
+                            sessionId, requestId, AiErrorCode.EMPTY_RESPONSE.getKey())));
             return deltas.concatWith(completion);
         }).onErrorResume(exception ->
         {
             log.warn("AI streaming chat request failed requestId={} type={}", requestId,
                     exception.getClass().getSimpleName());
-            return Flux.just(event("error", "AI 服务暂不可用，请稍后重试",
-                    sessionId, requestId, "MODEL_UNAVAILABLE"));
+            AiErrorCode error = classify(exception);
+            return Flux.just(event("error", error.getMessage(),
+                    sessionId, requestId, error.getKey()));
         }));
     }
 
@@ -193,5 +196,37 @@ public class AiChatServiceImpl implements IAiChatService
         AiChatStreamEvent event = new AiChatStreamEvent(type, content, sessionId, requestId);
         event.setCode(code);
         return event;
+    }
+
+    private ServiceException serviceException(AiErrorCode code)
+    {
+        return new ServiceException(code.getMessage(), code.getCode());
+    }
+
+    private AiErrorCode classify(Throwable exception)
+    {
+        Throwable current = exception;
+        while (current != null)
+        {
+            if (current instanceof ToolCallLimitExceededException)
+            {
+                return AiErrorCode.TOOL_CALL_LIMIT;
+            }
+            if (current instanceof ServiceException serviceException)
+            {
+                AiErrorCode code = AiErrorCode.fromCode(serviceException.getCode());
+                if (code != null)
+                {
+                    return code;
+                }
+            }
+            String name = current.getClass().getSimpleName().toLowerCase();
+            if (name.contains("timeout"))
+            {
+                return AiErrorCode.MODEL_TIMEOUT;
+            }
+            current = current.getCause();
+        }
+        return AiErrorCode.MODEL_UNAVAILABLE;
     }
 }

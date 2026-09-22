@@ -69,6 +69,12 @@ spring:
         initial-interval: 1s
         multiplier: 2
         max-interval: 8s
+    tools:
+      throw-exception-on-error: true
+      limits:
+        max-calls-per-tool-default: 3
+        max-total-tool-calls: 8
+        on-limit-exceeded: THROW
   # 资源信息
   messages:
     # 国际化资源文件路径
