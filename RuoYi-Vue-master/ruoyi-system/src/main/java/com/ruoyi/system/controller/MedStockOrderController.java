@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +40,21 @@ public class MedStockOrderController extends BaseController
         return getDataTable(orderService.selectMedStockOrderList(order));
     }
 
+    @PreAuthorize("@ss.hasPermi('system:stockOrder:list')")
+    @GetMapping("/trend")
+    public AjaxResult trend()
+    {
+        return success(orderService.selectMonthlyTrend());
+    }
+
+    /** 出库/退库选择批次时按药品实时查询，避免前端只加载固定数量的批次。 */
+    @PreAuthorize("@ss.hasAnyPermi('system:stockOrder:add,system:stockOrder:edit,system:stockOrder:query')")
+    @GetMapping("/batch/options")
+    public AjaxResult batchOptions(@RequestParam Long medId, @RequestParam String orderType)
+    {
+        return success(orderService.selectAvailableBatchOptions(medId, orderType));
+    }
+
     @PreAuthorize("@ss.hasPermi('system:stockOrder:query')")
     @GetMapping("/{orderId}")
     public AjaxResult getInfo(@PathVariable Long orderId)
@@ -54,12 +70,28 @@ public class MedStockOrderController extends BaseController
         return toAjax(orderService.insertMedStockOrder(order));
     }
 
+    @PreAuthorize("@ss.hasPermi('system:stockOrder:add') and @ss.hasPermi('system:stockOrder:confirm')")
+    @Log(title = "库存业务单新增并确认", businessType = BusinessType.INSERT)
+    @PostMapping("/confirm")
+    public AjaxResult addAndConfirm(@RequestBody MedStockOrder order)
+    {
+        return toAjax(orderService.insertAndConfirmMedStockOrder(order));
+    }
+
     @PreAuthorize("@ss.hasPermi('system:stockOrder:edit')")
     @Log(title = "库存业务单", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody MedStockOrder order)
     {
         return toAjax(orderService.updateMedStockOrder(order));
+    }
+
+    @PreAuthorize("@ss.hasPermi('system:stockOrder:edit') and @ss.hasPermi('system:stockOrder:confirm')")
+    @Log(title = "库存业务单修改并确认", businessType = BusinessType.UPDATE)
+    @PutMapping("/confirm")
+    public AjaxResult editAndConfirm(@RequestBody MedStockOrder order)
+    {
+        return toAjax(orderService.updateAndConfirmMedStockOrder(order));
     }
 
     @PreAuthorize("@ss.hasPermi('system:stockOrder:confirm')")

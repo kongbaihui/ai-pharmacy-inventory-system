@@ -3,6 +3,8 @@ package com.ruoyi.system.service.impl;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Calendar;
+import java.util.Map;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,6 +22,7 @@ import com.ruoyi.system.mapper.MedStockBatchMapper;
 import com.ruoyi.system.mapper.MedStockOrderMapper;
 import com.ruoyi.system.service.IMedStockOrderService;
 import com.ruoyi.system.service.IMedStockService;
+import com.ruoyi.system.service.IMedStockWarnService;
 
 /** 库存业务单Service业务层处理 */
 @Service
@@ -34,10 +37,40 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
     @Autowired
     private IMedStockService stockService;
 
+    @Autowired
+    private IMedStockWarnService stockWarnService;
+
     @Override
     public List<MedStockOrder> selectMedStockOrderList(MedStockOrder order)
     {
         return orderMapper.selectMedStockOrderList(order);
+    }
+
+    @Override
+    public List<Map<String, Object>> selectMonthlyTrend()
+    {
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.DAY_OF_MONTH, 1);
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        calendar.add(Calendar.MONTH, -11);
+        return orderMapper.selectMonthlyTrend(calendar.getTime());
+    }
+
+    @Override
+    public List<MedStockBatch> selectAvailableBatchOptions(Long medId, String orderType)
+    {
+        if (medId == null)
+        {
+            throw new ServiceException("药品不能为空");
+        }
+        if (!("2".equals(orderType) || "3".equals(orderType)))
+        {
+            throw new ServiceException("只有出库或退库可以选择库存批次");
+        }
+        return orderMapper.selectAvailableBatchOptions(medId, orderType);
     }
 
     @Override
@@ -61,8 +94,23 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         order.setOperator(StringUtils.isEmpty(order.getOperator()) ? SecurityUtils.getUsername() : order.getOperator());
         order.setCreateBy(SecurityUtils.getUsername());
         int rows = orderMapper.insertMedStockOrder(order);
+        if (rows != 1 || order.getOrderId() == null)
+        {
+            throw new ServiceException("业务单保存失败");
+        }
         insertItems(order);
         return rows;
+    }
+
+    @Override
+    @Transactional
+    public int insertAndConfirmMedStockOrder(MedStockOrder order)
+    {
+        if (insertMedStockOrder(order) != 1 || order.getOrderId() == null)
+        {
+            throw new ServiceException("业务单保存失败，未更新库存");
+        }
+        return confirmMedStockOrder(order.getOrderId());
     }
 
     @Override
@@ -78,9 +126,25 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         order.setOrderType(saved.getOrderType());
         validateAndCalculate(order);
         order.setUpdateBy(SecurityUtils.getUsername());
+        int rows = orderMapper.updateMedStockOrder(order);
+        if (rows != 1)
+        {
+            throw new ServiceException("业务单修改失败");
+        }
         orderMapper.deleteItemsByOrderId(order.getOrderId());
         insertItems(order);
-        return orderMapper.updateMedStockOrder(order);
+        return rows;
+    }
+
+    @Override
+    @Transactional
+    public int updateAndConfirmMedStockOrder(MedStockOrder order)
+    {
+        if (updateMedStockOrder(order) != 1)
+        {
+            throw new ServiceException("业务单保存失败，未更新库存");
+        }
+        return confirmMedStockOrder(order.getOrderId());
     }
 
     @Override
@@ -113,7 +177,13 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         order.setConfirmBy(SecurityUtils.getUsername());
         order.setConfirmTime(new Date());
         order.setUpdateBy(SecurityUtils.getUsername());
-        return orderMapper.updateOrderConfirmed(order);
+        int rows = orderMapper.updateOrderConfirmed(order);
+        if (rows != 1)
+        {
+            throw new ServiceException("业务单确认状态更新失败，库存变更已回滚");
+        }
+        stockWarnService.scanStockWarn();
+        return rows;
     }
 
     private void confirmInbound(MedStockOrder order, MedStockOrderItem item)
@@ -133,7 +203,10 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
             batch.setInTime(new Date());
             batch.setBatchStatus("0");
             batch.setCreateBy(SecurityUtils.getUsername());
-            batchMapper.insertMedStockBatch(batch);
+            if (batchMapper.insertMedStockBatch(batch) != 1 || batch.getBatchId() == null)
+            {
+                throw new ServiceException("入库批次创建失败");
+            }
         }
         else
         {
@@ -153,9 +226,15 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
             }
         }
         item.setBatchId(batch.getBatchId());
-        orderMapper.updateItemBatchId(item.getItemId(), batch.getBatchId());
-        stockService.adjustStock(item.getMedId(), batch.getBatchId(), item.getQuantity(), "1",
-                order.getOrderNo(), order.getOrderId(), "药品入库");
+        if (orderMapper.updateItemBatchId(item.getItemId(), batch.getBatchId()) != 1)
+        {
+            throw new ServiceException("入库明细批次关联失败");
+        }
+        if (stockService.adjustStock(item.getMedId(), batch.getBatchId(), item.getQuantity(), "1",
+                order.getOrderNo(), order.getOrderId(), "药品入库") != 1)
+        {
+            throw new ServiceException("入库库存或流水更新失败");
+        }
     }
 
     private void confirmOutbound(MedStockOrder order, MedStockOrderItem item)
@@ -170,8 +249,11 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         {
             throw new ServiceException("药品【" + item.getMedName() + "】批次库存不足，当前可用 " + batch.getRemainQty());
         }
-        stockService.adjustStock(item.getMedId(), batch.getBatchId(), -item.getQuantity(), "2",
-                order.getOrderNo(), order.getOrderId(), "药品出库");
+        if (stockService.adjustStock(item.getMedId(), batch.getBatchId(), -item.getQuantity(), "2",
+                order.getOrderNo(), order.getOrderId(), "药品出库") != 1)
+        {
+            throw new ServiceException("出库库存或流水更新失败");
+        }
     }
 
     private void confirmReturn(MedStockOrder order, MedStockOrderItem item)
@@ -182,8 +264,11 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         {
             throw new ServiceException("药品【" + item.getMedName() + "】退库后将超过该批次累计入库数量");
         }
-        stockService.adjustStock(item.getMedId(), batch.getBatchId(), item.getQuantity(), "3",
-                order.getOrderNo(), order.getOrderId(), "科室药品退库");
+        if (stockService.adjustStock(item.getMedId(), batch.getBatchId(), item.getQuantity(), "3",
+                order.getOrderNo(), order.getOrderId(), "科室药品退库") != 1)
+        {
+            throw new ServiceException("退库库存或流水更新失败");
+        }
     }
 
     private MedStockBatch requireMatchingBatch(MedStockOrderItem item)
@@ -214,7 +299,11 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
             MedStockOrder order = orderMapper.selectMedStockOrderForUpdate(orderId);
             checkDraft(order, "删除");
             orderMapper.deleteItemsByOrderId(orderId);
-            rows += orderMapper.deleteMedStockOrderById(orderId);
+            if (orderMapper.deleteMedStockOrderById(orderId) != 1)
+            {
+                throw new ServiceException("业务单删除失败");
+            }
+            rows++;
         }
         return rows;
     }
@@ -300,7 +389,10 @@ public class MedStockOrderServiceImpl implements IMedStockOrderService
         for (MedStockOrderItem item : order.getItemList())
         {
             item.setOrderId(order.getOrderId());
-            orderMapper.insertMedStockOrderItem(item);
+            if (orderMapper.insertMedStockOrderItem(item) != 1 || item.getItemId() == null)
+            {
+                throw new ServiceException("业务单明细保存失败");
+            }
         }
     }
 

@@ -3,6 +3,23 @@
 
 SET NAMES utf8mb4;
 
+-- 同一药品的生产批号在库存中必须唯一。使用信息_schema判断，保证脚本可重复执行。
+SET @batchUniqueExists = (
+  SELECT COUNT(1)
+  FROM information_schema.statistics
+  WHERE table_schema = database()
+    AND table_name = 'med_stock_batch'
+    AND index_name = 'uk_stock_batch_med_no'
+);
+SET @batchUniqueSql = IF(
+  @batchUniqueExists = 0,
+  'alter table med_stock_batch add unique key uk_stock_batch_med_no (med_id, batch_no)',
+  'select 1'
+);
+PREPARE batchUniqueStatement FROM @batchUniqueSql;
+EXECUTE batchUniqueStatement;
+DEALLOCATE PREPARE batchUniqueStatement;
+
 create table if not exists med_stock_order (
   order_id        bigint(20)      not null auto_increment    comment '业务单ID',
   order_no        varchar(64)     not null                   comment '业务单号',

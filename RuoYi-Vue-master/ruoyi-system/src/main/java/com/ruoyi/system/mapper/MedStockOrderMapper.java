@@ -2,6 +2,8 @@ package com.ruoyi.system.mapper;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Date;
+import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.MedStockBatch;
 import com.ruoyi.system.domain.MedStockOrder;
@@ -11,6 +13,9 @@ import com.ruoyi.system.domain.MedStockOrderItem;
 public interface MedStockOrderMapper
 {
     List<MedStockOrder> selectMedStockOrderList(MedStockOrder order);
+    List<Map<String, Object>> selectMonthlyTrend(@Param("startDate") Date startDate);
+    List<MedStockBatch> selectAvailableBatchOptions(@Param("medId") Long medId,
+            @Param("orderType") String orderType);
     MedStockOrder selectMedStockOrderById(Long orderId);
     MedStockOrder selectMedStockOrderForUpdate(Long orderId);
     List<MedStockOrderItem> selectItemListByOrderId(Long orderId);

@@ -77,6 +77,36 @@
         order by o.order_id desc
     </select>
 
+    <select id="selectMonthlyTrend" resultType="java.util.HashMap">
+        select date_format(order_date, '%Y-%m') as month,
+               sum(case when order_type = '1' then total_qty else 0 end) as inboundQty,
+               sum(case when order_type = '2' then total_qty else 0 end) as outboundQty,
+               sum(case when order_type = '3' then total_qty else 0 end) as returnQty
+        from med_stock_order
+        where order_status = '1'
+          and order_date &gt;= #{startDate}
+        group by date_format(order_date, '%Y-%m')
+        order by month
+    </select>
+
+    <select id="selectAvailableBatchOptions" resultMap="MedStockBatchResult">
+        select batch_id, med_id, supplier_id, batch_no, produce_date, expire_date,
+               batch_qty, remain_qty, purchase_price, batch_status
+        from med_stock_batch
+        where med_id = #{medId}
+        <choose>
+            <when test="orderType == '2'">
+                and remain_qty &gt; 0
+                and (expire_date is null or expire_date &gt;= curdate())
+                and batch_status != '3'
+            </when>
+            <otherwise>
+                and remain_qty &lt; batch_qty
+            </otherwise>
+        </choose>
+        order by expire_date, batch_id
+    </select>
+
     <select id="selectMedStockOrderById" parameterType="Long" resultMap="MedStockOrderResult">
         <include refid="selectOrderVo" />
         where o.order_id = #{orderId}

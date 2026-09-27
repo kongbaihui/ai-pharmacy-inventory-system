@@ -70,9 +70,9 @@
 
       <div class="table-actions">
         <el-button v-hasPermi="['system:stockOrder:add']" type="primary" icon="el-icon-plus" size="small" @click="handleAdd">新建{{ typeName(currentType) }}单</el-button>
-        <el-button v-hasPermi="['system:stockOrder:edit']" icon="el-icon-edit" size="small" :disabled="single" @click="handleUpdate">修改草稿</el-button>
+        <el-button v-hasPermi="['system:stockOrder:edit']" icon="el-icon-edit" size="small" :disabled="single || selectedConfirmed" @click="handleUpdate">修改草稿</el-button>
         <el-button v-hasPermi="['system:stockOrder:confirm']" type="success" plain icon="el-icon-check" size="small" :disabled="single || selectedConfirmed" @click="handleConfirm">确认单据</el-button>
-        <el-button v-hasPermi="['system:stockOrder:remove']" type="danger" plain icon="el-icon-delete" size="small" :disabled="multiple" @click="handleDelete">删除草稿</el-button>
+        <el-button v-hasPermi="['system:stockOrder:remove']" type="danger" plain icon="el-icon-delete" size="small" :disabled="multiple || hasSelectedConfirmed" @click="handleDelete">删除草稿</el-button>
       </div>
 
       <el-table v-loading="loading" :data="orderList" stripe @selection-change="handleSelectionChange">
@@ -158,8 +158,8 @@
           </el-table-column>
           <el-table-column v-else label="库存批次" min-width="190">
             <template slot-scope="scope">
-              <el-select v-model="scope.row.batchId" filterable placeholder="选择批次" style="width:100%" @change="onBatchChange(scope.row)">
-                <el-option v-for="item in batchOptionsFor(scope.row.medId)" :key="item.batchId" :label="item.batchNo + '（可用 ' + item.remainQty + '）'" :value="item.batchId" />
+              <el-select v-model="scope.row.batchId" filterable :loading="isBatchLoading(scope.row.medId)" placeholder="请先选择药品" style="width:100%" @change="onBatchChange(scope.row)">
+                <el-option v-for="item in batchOptionsFor(scope.row.medId)" :key="item.batchId" :label="batchOptionLabel(item)" :value="item.batchId" />
               </el-select>
             </template>
           </el-table-column>
@@ -186,17 +186,23 @@
       <div slot="footer" class="dialog-footer">
         <span class="total-line">合计：{{ totalQuantity }} 件 / ￥{{ totalAmount }}</span>
         <el-button @click="open = false">{{ viewOnly ? '关闭' : '取消' }}</el-button>
-        <el-button v-if="!viewOnly" type="primary" :loading="submitLoading" @click="submitForm">保存草稿</el-button>
+        <el-button v-if="!viewOnly" :disabled="submitLoading" @click="submitForm(false)">仅保存草稿</el-button>
+        <el-button
+          v-if="!viewOnly"
+          v-hasPermi="['system:stockOrder:confirm']"
+          type="primary"
+          :loading="submitLoading"
+          @click="submitForm(true)"
+        >保存并{{ typeName(form.orderType) }}</el-button>
       </div>
     </el-dialog>
   </div>
 </template>
 
 <script>
-import { listStockOrder, getStockOrder, addStockOrder, updateStockOrder, confirmStockOrder, delStockOrder, listStockFlow } from '@/api/system/stockOrder'
+import { listStockOrder, getStockOrder, addStockOrder, addAndConfirmStockOrder, updateStockOrder, updateAndConfirmStockOrder, confirmStockOrder, delStockOrder, listStockFlow, listStockOrderBatchOptions } from '@/api/system/stockOrder'
 import { optionselectInfo } from '@/api/system/info'
 import { optionselectSupplier } from '@/api/system/supplier'
-import { listBatch } from '@/api/system/batch'
 
 export default {
   name: 'StockOrder',
@@ -216,7 +222,8 @@ export default {
       multiple: true,
       medOptions: [],
       supplierOptions: [],
-      batchOptions: [],
+      batchOptionsByKey: {},
+      batchLoadingByKey: {},
       queryParams: { pageNum: 1, pageSize: 10, orderNo: undefined, orderStatus: undefined, orderType: '1' },
       flowQuery: { pageNum: 1, pageSize: 10, bizNo: undefined, flowType: undefined, medId: undefined },
       form: {},
@@ -240,6 +247,7 @@ export default {
       return this.currentType === '1' ? '登记采购到货，确认后自动增加批次及总库存' : (this.currentType === '2' ? '登记科室领用，确认后按批次扣减可用库存' : '登记科室退回，确认后恢复原批次库存')
     },
     selectedConfirmed() { return this.selectedRows.length !== 1 || this.selectedRows[0].orderStatus === '1' },
+    hasSelectedConfirmed() { return this.selectedRows.some(item => item.orderStatus === '1') },
     dialogTitle() { return (this.viewOnly ? '查看' : (this.form.orderId ? '修改' : '新建')) + this.typeName(this.form.orderType) + '单' },
     totalQuantity() { return (this.form.itemList || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0) },
     totalAmount() { return this.money((this.form.itemList || []).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)) }
@@ -260,7 +268,6 @@ export default {
     loadOptions() {
       optionselectInfo().then(res => { this.medOptions = res.data || [] })
       optionselectSupplier().then(res => { this.supplierOptions = res.data || [] })
-      listBatch({ pageNum: 1, pageSize: 1000 }).then(res => { this.batchOptions = res.rows || [] })
     },
     getList() { this.isFlowMode ? this.getFlowList() : this.getOrderList() },
     getOrderList() {
@@ -296,21 +303,53 @@ export default {
         this.form.itemList = this.form.itemList || []
         this.viewOnly = viewOnly
         this.open = true
+        if (this.form.orderType !== '1') {
+          this.form.itemList.forEach(item => this.loadBatchOptions(item.medId))
+        }
       })
     },
     addItem() { this.form.itemList.push(this.emptyItem()) },
     removeItem(index) { if (this.form.itemList.length > 1) this.form.itemList.splice(index, 1); else this.$modal.msgWarning('至少保留一条药品明细') },
-    onMedChange(row) { row.batchId = undefined; row.batchNo = undefined; row.unitPrice = 0 },
+    onMedChange(row) {
+      row.batchId = undefined
+      row.batchNo = undefined
+      row.unitPrice = 0
+      if (this.form.orderType !== '1') this.loadBatchOptions(row.medId)
+    },
     onBatchChange(row) {
-      const batch = this.batchOptions.find(item => item.batchId === row.batchId)
+      const batch = this.batchOptionsFor(row.medId).find(item => item.batchId === row.batchId)
       if (batch) { row.medId = batch.medId; row.batchNo = batch.batchNo; row.unitPrice = batch.purchasePrice || 0 }
     },
+    batchOptionKey(medId) { return `${this.form.orderType || this.currentType}_${medId || ''}` },
+    loadBatchOptions(medId) {
+      if (!medId || this.form.orderType === '1') return Promise.resolve([])
+      const key = this.batchOptionKey(medId)
+      if (this.batchOptionsByKey[key]) return Promise.resolve(this.batchOptionsByKey[key])
+      if (this.batchLoadingByKey[key]) return this.batchLoadingByKey[key]
+      const request = listStockOrderBatchOptions(medId, this.form.orderType)
+        .then(res => {
+          const rows = res.data || []
+          this.$set(this.batchOptionsByKey, key, rows)
+          return rows
+        })
+        .finally(() => { this.$delete(this.batchLoadingByKey, key) })
+      this.$set(this.batchLoadingByKey, key, request)
+      return request
+    },
+    isBatchLoading(medId) { return !!this.batchLoadingByKey[this.batchOptionKey(medId)] },
     batchOptionsFor(medId) {
-      return this.batchOptions.filter(item => {
-        if (item.medId !== medId) return false
-        if (this.form.orderType === '2') return Number(item.remainQty || 0) > 0 && item.batchStatus !== '2'
-        return Number(item.batchQty || 0) > Number(item.remainQty || 0)
-      })
+      const available = this.batchOptionsByKey[this.batchOptionKey(medId)] || []
+      const selected = (this.form.itemList || [])
+        .filter(item => item.medId === medId && item.batchId && !available.some(batch => batch.batchId === item.batchId))
+        .map(item => ({ batchId: item.batchId, medId: item.medId, batchNo: item.batchNo, remainQty: item.remainQty, historical: true }))
+      return available.concat(selected)
+    },
+    batchOptionLabel(item) {
+      if (item.historical) return `${item.batchNo || item.batchId}（当前不可用，仅供查看）`
+      const quantity = this.form.orderType === '3'
+        ? Number(item.batchQty || 0) - Number(item.remainQty || 0)
+        : Number(item.remainQty || 0)
+      return `${item.batchNo}（${this.form.orderType === '3' ? '可退' : '可用'} ${quantity}）`
     },
     validateItems() {
       if (!this.form.itemList || !this.form.itemList.length) return '至少添加一条药品明细'
@@ -322,19 +361,34 @@ export default {
       }
       return ''
     },
-    submitForm() {
+    submitForm(confirmAfterSave) {
       this.$refs.form.validate(valid => {
         if (!valid) return
         const message = this.validateItems()
         if (message) return this.$modal.msgWarning(message)
-        this.submitLoading = true
-        const action = this.form.orderId ? updateStockOrder : addStockOrder
-        action(this.form).then(() => {
-          this.$modal.msgSuccess(this.form.orderId ? '修改成功' : '新增成功')
-          this.open = false
-          this.getOrderList()
-        }).finally(() => { this.submitLoading = false })
+        if (!confirmAfterSave) return this.saveOrder(false)
+        this.$modal.confirm(`确认保存并${this.typeName(this.form.orderType)}吗？操作成功后将立即更新批次、总库存和库存流水，且不可撤销。`)
+          .then(() => this.saveOrder(true))
+          .catch(() => {})
       })
+    },
+    saveOrder(confirmAfterSave) {
+      this.submitLoading = true
+      const isEdit = !!this.form.orderId
+      const action = confirmAfterSave
+        ? (isEdit ? updateAndConfirmStockOrder : addAndConfirmStockOrder)
+        : (isEdit ? updateStockOrder : addStockOrder)
+      return action(this.form).then(() => {
+        if (confirmAfterSave) {
+          this.$modal.msgSuccess(`${this.typeName(this.form.orderType)}成功，批次、总库存和库存流水已同步更新`)
+          this.batchOptionsByKey = {}
+          this.loadOptions()
+        } else {
+          this.$modal.msgSuccess('草稿已保存，尚未更新库存；确认后才会产生库存流水')
+        }
+        this.open = false
+        this.getOrderList()
+      }).finally(() => { this.submitLoading = false })
     },
     handleConfirm(row) {
       const target = row.orderId ? row : this.selectedRows[0]

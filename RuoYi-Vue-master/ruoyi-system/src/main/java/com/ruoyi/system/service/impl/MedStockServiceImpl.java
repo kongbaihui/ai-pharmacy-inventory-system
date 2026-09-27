@@ -98,7 +98,10 @@ public class MedStockServiceImpl implements IMedStockService
             stock.setLockQty(0L);
             // med_stock 表以 update_by、update_time 作为唯一的审计字段，首次建档同样记录在这里
             stock.setUpdateBy(SecurityUtils.getUsername());
-            medStockMapper.insertMedStock(stock);
+            if (medStockMapper.insertMedStock(stock) != 1)
+            {
+                throw new ServiceException("库存记录创建失败");
+            }
         }
         long beforeQty = stock.getTotalQty() == null ? 0L : stock.getTotalQty();
         long afterQty = beforeQty + changeQty;
@@ -116,7 +119,10 @@ public class MedStockServiceImpl implements IMedStockService
             stock.setLastOutTime(new Date());
         }
         stock.setUpdateBy(SecurityUtils.getUsername());
-        medStockMapper.updateMedStockQty(stock);
+        if (medStockMapper.updateMedStockQty(stock) != 1)
+        {
+            throw new ServiceException("库存数量更新失败");
+        }
 
         MedStockFlow flow = new MedStockFlow();
         flow.setMedId(medId);
@@ -130,7 +136,11 @@ public class MedStockServiceImpl implements IMedStockService
         flow.setOperator(SecurityUtils.getUsername());
         flow.setFlowTime(new Date());
         flow.setRemark(remark);
-        return medStockMapper.insertMedStockFlow(flow);
+        if (medStockMapper.insertMedStockFlow(flow) != 1)
+        {
+            throw new ServiceException("库存流水生成失败");
+        }
+        return 1;
     }
 
     /**
