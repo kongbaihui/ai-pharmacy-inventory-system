@@ -20,6 +20,9 @@ public interface MedStockCheckMapper
      */
     public MedStockCheck selectMedStockCheckByCheckId(Long checkId);
 
+    /** 查询并锁定库存盘点，防止重复审核。 */
+    public MedStockCheck selectMedStockCheckForUpdate(Long checkId);
+
     /**
      * 查询库存盘点列表
      * 

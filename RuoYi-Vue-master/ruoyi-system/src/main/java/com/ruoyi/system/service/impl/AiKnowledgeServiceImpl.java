@@ -66,7 +66,7 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
     private final AiKnowledgeProperties properties;
     private final KnowledgeTextChunker chunker;
     private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
+    private HttpClient httpClient;
 
     public AiKnowledgeServiceImpl(AiKnowledgeProperties properties, KnowledgeTextChunker chunker,
             ObjectMapper objectMapper)
@@ -74,10 +74,6 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         this.properties = properties;
         this.chunker = chunker;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(20))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
     }
 
     @Override
@@ -315,7 +311,7 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
                 .header("User-Agent", "ai-pharmacy-knowledge-builder/1.0")
                 .GET()
                 .build();
-        HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response = httpClient().send(request, HttpResponse.BodyHandlers.ofInputStream());
         validateUri(response.uri());
         if (response.statusCode() < 200 || response.statusCode() >= 300)
         {
@@ -346,6 +342,23 @@ public class AiKnowledgeServiceImpl implements IAiKnowledgeService
         ensureChildPath(rawDir, target);
         Files.write(target, bytes);
         return new DownloadedSource(target, sha256(bytes));
+    }
+
+    /**
+     * 本地资料导入和检索不依赖网络，因此只在下载远程资料时创建 HTTP 客户端。
+     * 某些受限运行环境禁止创建 HttpClient 使用的回环通道，延迟初始化可避免
+     * 这些环境在执行纯本地知识库操作时无故失败。
+     */
+    private HttpClient httpClient()
+    {
+        if (httpClient == null)
+        {
+            httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(20))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+        }
+        return httpClient;
     }
 
     private DownloadedSource copyImported(BuildSource buildSource, Path rawDir) throws Exception

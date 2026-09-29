@@ -45,6 +45,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where check_id = #{checkId}
     </select>
 
+    <select id="selectMedStockCheckForUpdate" parameterType="Long" resultMap="MedStockCheckResult">
+        <include refid="selectMedStockCheckVo"/>
+        where check_id = #{checkId}
+        for update
+    </select>
+
     <select id="selectMaxCheckNo" parameterType="String" resultType="String">
         select max(check_no) from med_stock_check where check_no like concat(#{prefix}, '%')
     </select>

@@ -16,6 +16,7 @@ import com.ruoyi.system.domain.MedStockCheck;
 import com.ruoyi.system.domain.MedStockCheckItem;
 import com.ruoyi.system.service.IMedStockCheckService;
 import com.ruoyi.system.service.IMedStockService;
+import com.ruoyi.system.service.IMedStockWarnService;
 
 /**
  * 库存盘点Service业务层处理
@@ -37,6 +38,9 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
 
     @Autowired
     private IMedStockService medStockService;
+
+    @Autowired
+    private IMedStockWarnService medStockWarnService;
 
     /**
      * 查询库存盘点
@@ -229,7 +233,7 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
 
     private void checkAllowDelete(Long checkId)
     {
-        MedStockCheck check = medStockCheckMapper.selectMedStockCheckByCheckId(checkId);
+        MedStockCheck check = medStockCheckMapper.selectMedStockCheckForUpdate(checkId);
         if (check != null && "3".equals(check.getCheckStatus()))
         {
             throw new ServiceException("盘点单【" + check.getCheckNo() + "】已审核，不允许删除");
@@ -246,7 +250,7 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
     @Transactional
     public int auditMedStockCheck(Long checkId)
     {
-        MedStockCheck check = medStockCheckMapper.selectMedStockCheckByCheckId(checkId);
+        MedStockCheck check = medStockCheckMapper.selectMedStockCheckForUpdate(checkId);
         if (check == null)
         {
             throw new ServiceException("盘点单不存在");
@@ -265,6 +269,22 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
         int adjustCount = 0;
         for (MedStockCheckItem item : items)
         {
+            if (item.getBatchId() != null)
+            {
+                com.ruoyi.system.domain.MedStockBatch batch =
+                        medStockBatchMapper.selectMedStockBatchForUpdate(item.getBatchId());
+                if (batch == null || !item.getMedId().equals(batch.getMedId()))
+                {
+                    throw new ServiceException("盘点批次不存在或与药品不匹配");
+                }
+                long currentQty = batch.getRemainQty() == null ? 0L : batch.getRemainQty();
+                long bookQty = item.getBookQty() == null ? 0L : item.getBookQty();
+                if (currentQty != bookQty)
+                {
+                    throw new ServiceException("批号【" + batch.getBatchNo()
+                            + "】在盘点期间发生库存变化，请重新创建盘点单");
+                }
+            }
             calcDiff(item);
             medStockCheckItemMapper.updateMedStockCheckItem(item);
             if (item.getDiffQty() == null || item.getDiffQty() == 0L)
@@ -275,10 +295,14 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
                     check.getCheckNo(), checkId, "库存盘点调整");
             if (item.getBatchId() != null)
             {
-                medStockBatchMapper.updateBatchRemainQty(item.getBatchId(), item.getDiffQty());
+                if (medStockBatchMapper.updateBatchRemainQty(item.getBatchId(), item.getDiffQty()) != 1)
+                {
+                    throw new ServiceException("盘点批次数量更新失败");
+                }
             }
             adjustCount++;
         }
+        medStockBatchMapper.refreshBatchStatus();
         MedStockCheck update = new MedStockCheck();
         update.setCheckId(checkId);
         update.setCheckStatus("3");
@@ -286,6 +310,7 @@ public class MedStockCheckServiceImpl implements IMedStockCheckService
         update.setAuditTime(new Date());
         update.setUpdateBy(SecurityUtils.getUsername());
         medStockCheckMapper.updateMedStockCheck(update);
+        medStockWarnService.scanStockWarn();
         return adjustCount;
     }
 

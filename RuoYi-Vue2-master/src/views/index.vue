@@ -65,12 +65,12 @@ import * as echarts from 'echarts'
 import { listInfo } from '@/api/system/info'
 import { getWarnSummary, listWarn } from '@/api/system/warn'
 import { getExpirySummary } from '@/api/system/batch'
-import { listStockOrder } from '@/api/system/stockOrder'
+import { listStockOrder, getStockOrderTrend } from '@/api/system/stockOrder'
 
 export default {
   name: 'Index',
   data() {
-    return { loading: false, medicineCount: 0, stockTotal: 0, warningCount: 0, nearExpiryCount: 0, expirySummary: {}, warnSummary: {}, recentOrders: [], warnings: [], allOrders: [], trendChart: null, statusChart: null }
+    return { loading: false, medicineCount: 0, stockTotal: 0, warningCount: 0, nearExpiryCount: 0, expirySummary: {}, warnSummary: {}, recentOrders: [], warnings: [], trendRows: [], trendChart: null, statusChart: null }
   },
   computed: {
     currentDate() { return this.parseTime(new Date(), '{y}年{m}月{d}日') },
@@ -93,7 +93,8 @@ export default {
         getWarnSummary().then(res => { this.warnSummary = res.data || {}; this.warningCount = Number(this.warnSummary.unhandleCount || 0) }),
         getExpirySummary().then(res => { this.expirySummary = res.data || {}; this.nearExpiryCount = Number(this.expirySummary.nearCount || 0); this.stockTotal = Number(this.expirySummary.normalQty || 0) + Number(this.expirySummary.nearQty || 0) + Number(this.expirySummary.expiredQty || 0) }),
         listWarn({ pageNum: 1, pageSize: 6, handleStatus: '0' }).then(res => { this.warnings = res.rows || [] }),
-        listStockOrder({ pageNum: 1, pageSize: 500 }).then(res => { this.allOrders = res.rows || []; this.recentOrders = this.allOrders.slice(0, 6) })
+        listStockOrder({ pageNum: 1, pageSize: 6 }).then(res => { this.recentOrders = res.rows || [] }),
+        getStockOrderTrend().then(res => { this.trendRows = res.data || [] })
       ]
       Promise.all(tasks.map(task => task.catch(() => null))).then(() => this.$nextTick(this.renderCharts)).finally(() => { this.loading = false })
     },
@@ -103,7 +104,7 @@ export default {
       this.trendChart = this.trendChart || echarts.init(this.$refs.trendChart)
       const months = [], inbound = [], outbound = [], now = new Date()
       for (let i = 11; i >= 0; i--) { const date = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`, label: `${date.getMonth() + 1}月` }); inbound.push(0); outbound.push(0) }
-      this.allOrders.filter(item => item.orderStatus === '1').forEach(item => { const index = months.findIndex(month => month.key === String(item.orderDate || '').slice(0, 7)); if (index > -1 && item.orderType === '1') inbound[index] += Number(item.totalQty || 0); if (index > -1 && item.orderType === '2') outbound[index] += Number(item.totalQty || 0) })
+      this.trendRows.forEach(item => { const index = months.findIndex(month => month.key === item.month); if (index > -1) { inbound[index] = Number(item.inboundQty || 0); outbound[index] = Number(item.outboundQty || 0) } })
       this.trendChart.setOption({ color: ['#10a995', '#2f7de1'], tooltip: { trigger: 'axis' }, grid: { left: 16, right: 18, top: 26, bottom: 8, containLabel: true }, xAxis: { type: 'category', boundaryGap: false, data: months.map(item => item.label), axisLine: { lineStyle: { color: '#dce4eb' } }, axisLabel: { color: '#718397' } }, yAxis: { type: 'value', splitLine: { lineStyle: { color: '#edf1f5' } }, axisLabel: { color: '#718397' } }, series: [{ name: '入库数量', type: 'line', smooth: true, symbolSize: 6, data: inbound, areaStyle: { color: 'rgba(16,169,149,.08)' } }, { name: '出库数量', type: 'line', smooth: true, symbolSize: 6, data: outbound }] })
     },
     renderStatusChart() {

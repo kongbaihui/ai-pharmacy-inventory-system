@@ -61,6 +61,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where c.clean_id = #{cleanId}
     </select>
 
+    <select id="selectMedExpiredCleanForUpdate" parameterType="Long" resultMap="MedExpiredCleanResult">
+        select clean_id, clean_no, med_id, batch_id, batch_no, expire_date, clean_qty, clean_type,
+               clean_reason, clean_status, clean_user, clean_time, audit_by, audit_time,
+               create_by, create_time, update_by, update_time, remark
+        from med_expired_clean
+        where clean_id = #{cleanId}
+        for update
+    </select>
+
     <select id="selectMaxCleanNo" parameterType="String" resultType="String">
         select max(clean_no) from med_expired_clean where clean_no like concat(#{prefix}, '%')
     </select>

@@ -15,6 +15,7 @@ import com.ruoyi.system.domain.MedExpiredClean;
 import com.ruoyi.system.domain.MedStockBatch;
 import com.ruoyi.system.service.IMedExpiredCleanService;
 import com.ruoyi.system.service.IMedStockService;
+import com.ruoyi.system.service.IMedStockWarnService;
 
 /**
  * 过期药品清理Service业务层处理
@@ -33,6 +34,9 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
 
     @Autowired
     private IMedStockService medStockService;
+
+    @Autowired
+    private IMedStockWarnService medStockWarnService;
 
     /**
      * 查询过期药品清理
@@ -150,7 +154,7 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
     @Transactional
     public int confirmMedExpiredClean(Long cleanId, String remark)
     {
-        MedExpiredClean clean = medExpiredCleanMapper.selectMedExpiredCleanByCleanId(cleanId);
+        MedExpiredClean clean = medExpiredCleanMapper.selectMedExpiredCleanForUpdate(cleanId);
         if (clean == null)
         {
             throw new ServiceException("清理记录不存在");
@@ -159,14 +163,14 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
         {
             throw new ServiceException("清理单【" + clean.getCleanNo() + "】已处理，无需重复确认");
         }
-        checkCleanData(clean);
+        MedStockBatch batch = checkCleanData(clean, true);
+        if (medStockBatchMapper.updateBatchRemainQty(batch.getBatchId(), -clean.getCleanQty()) != 1)
+        {
+            throw new ServiceException("清理批次数量更新失败，请刷新后重试");
+        }
         medStockService.adjustStock(clean.getMedId(), clean.getBatchId(), -clean.getCleanQty(), "5",
                 clean.getCleanNo(), cleanId, "过期药品清理：" + (StringUtils.isEmpty(clean.getCleanReason()) ? "" : clean.getCleanReason()));
-        if (clean.getBatchId() != null)
-        {
-            medStockBatchMapper.updateBatchRemainQty(clean.getBatchId(), -clean.getCleanQty());
-            medStockBatchMapper.refreshBatchStatus();
-        }
+        medStockBatchMapper.refreshBatchStatus();
         MedExpiredClean update = new MedExpiredClean();
         update.setCleanId(cleanId);
         update.setCleanStatus("1");
@@ -174,7 +178,9 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
         update.setAuditTime(new Date());
         update.setRemark(remark);
         update.setUpdateBy(SecurityUtils.getUsername());
-        return medExpiredCleanMapper.updateMedExpiredClean(update);
+        int rows = medExpiredCleanMapper.updateMedExpiredClean(update);
+        medStockWarnService.scanStockWarn();
+        return rows;
     }
 
     /**
@@ -211,6 +217,11 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
      */
     private MedStockBatch checkCleanData(MedExpiredClean medExpiredClean)
     {
+        return checkCleanData(medExpiredClean, false);
+    }
+
+    private MedStockBatch checkCleanData(MedExpiredClean medExpiredClean, boolean lockBatch)
+    {
         if (medExpiredClean.getBatchId() == null)
         {
             throw new ServiceException("请选择需要清理的药品批次");
@@ -219,7 +230,9 @@ public class MedExpiredCleanServiceImpl implements IMedExpiredCleanService
         {
             throw new ServiceException("清理数量必须大于 0");
         }
-        MedStockBatch batch = medStockBatchMapper.selectMedStockBatchByBatchId(medExpiredClean.getBatchId());
+        MedStockBatch batch = lockBatch
+                ? medStockBatchMapper.selectMedStockBatchForUpdate(medExpiredClean.getBatchId())
+                : medStockBatchMapper.selectMedStockBatchByBatchId(medExpiredClean.getBatchId());
         if (batch == null)
         {
             throw new ServiceException("药品批次不存在");

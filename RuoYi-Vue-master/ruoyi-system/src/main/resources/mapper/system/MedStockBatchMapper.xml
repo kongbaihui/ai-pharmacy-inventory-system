@@ -64,6 +64,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where b.batch_id = #{batchId}
     </select>
 
+    <select id="selectMedStockBatchForUpdate" parameterType="Long" resultMap="MedStockBatchResult">
+        select batch_id, med_id, supplier_id, batch_no, produce_date, expire_date, batch_qty,
+               remain_qty, purchase_price, in_time, batch_status, create_by, create_time,
+               update_by, update_time, remark
+        from med_stock_batch
+        where batch_id = #{batchId}
+        for update
+    </select>
+
     <insert id="insertMedStockBatch" parameterType="MedStockBatch" useGeneratedKeys="true" keyProperty="batchId">
         insert into med_stock_batch
         <trim prefix="(" suffix=")" suffixOverrides=",">
@@ -119,7 +128,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </update>
 
     <update id="updateBatchRemainQty">
-        update med_stock_batch set remain_qty = greatest(ifnull(remain_qty, 0) + #{changeQty}, 0), update_time = sysdate() where batch_id = #{batchId}
+        update med_stock_batch
+        set remain_qty = ifnull(remain_qty, 0) + #{changeQty}, update_time = sysdate()
+        where batch_id = #{batchId}
+          and ifnull(remain_qty, 0) + #{changeQty} &gt;= 0
     </update>
 
     <update id="refreshBatchStatus">
@@ -132,7 +144,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 else '0'
             end,
             b.update_time = sysdate()
-        where b.batch_status != '3' or ifnull(b.remain_qty, 0) &lt;= 0
     </update>
 
     <select id="selectExpirySummary" resultType="java.util.HashMap">

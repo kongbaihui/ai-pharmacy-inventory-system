@@ -19,6 +19,9 @@ public interface MedExpiredCleanMapper
      */
     public MedExpiredClean selectMedExpiredCleanByCleanId(Long cleanId);
 
+    /** 查询并锁定清理申请，防止重复确认。 */
+    public MedExpiredClean selectMedExpiredCleanForUpdate(Long cleanId);
+
     /**
      * 查询过期药品清理列表
      * 

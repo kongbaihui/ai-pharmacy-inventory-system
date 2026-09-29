@@ -21,6 +21,9 @@ public interface MedStockBatchMapper
      */
     public MedStockBatch selectMedStockBatchByBatchId(Long batchId);
 
+    /** 查询并锁定批次，供盘点和清理事务校验使用。 */
+    public MedStockBatch selectMedStockBatchForUpdate(Long batchId);
+
     /**
      * 查询药品库存批次列表（支持临期、过期筛选）
      * 

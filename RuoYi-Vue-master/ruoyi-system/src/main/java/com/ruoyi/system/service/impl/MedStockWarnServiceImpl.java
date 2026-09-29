@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,20 +69,48 @@ public class MedStockWarnServiceImpl implements IMedStockWarnService
     {
         medStockBatchMapper.refreshBatchStatus();
         List<MedStockWarn> sourceList = medStockWarnMapper.selectStockWarnSourceList();
-        if (sourceList == null || sourceList.isEmpty())
+        Map<String, MedStockWarn> currentWarnings = new LinkedHashMap<>();
+        if (sourceList != null)
         {
-            return 0;
-        }
-        List<MedStockWarn> insertList = new ArrayList<MedStockWarn>();
-        for (MedStockWarn warn : sourceList)
-        {
-            if (medStockWarnMapper.countUnhandleWarn(warn.getMedId(), warn.getBatchId(), warn.getWarnType()) > 0)
+            for (MedStockWarn warn : sourceList)
             {
-                continue;
+                currentWarnings.put(warnKey(warn), warn);
             }
-            warn.setWarnTime(new Date());
+        }
+
+        MedStockWarn query = new MedStockWarn();
+        query.setHandleStatus("0");
+        List<MedStockWarn> existingWarnings = medStockWarnMapper.selectMedStockWarnList(query);
+        String username = SecurityUtils.getUsername();
+        Date now = new Date();
+        if (existingWarnings != null)
+        {
+            for (MedStockWarn existing : existingWarnings)
+            {
+                MedStockWarn current = currentWarnings.remove(warnKey(existing));
+                if (current == null)
+                {
+                    existing.setHandleStatus("2");
+                    existing.setHandleUser(username);
+                    existing.setHandleTime(now);
+                    existing.setHandleRemark("库存或效期状态已恢复，系统自动关闭");
+                    medStockWarnMapper.updateMedStockWarn(existing);
+                }
+                else
+                {
+                    current.setWarnId(existing.getWarnId());
+                    current.setWarnTime(now);
+                    medStockWarnMapper.updateMedStockWarn(current);
+                }
+            }
+        }
+
+        List<MedStockWarn> insertList = new ArrayList<MedStockWarn>();
+        for (MedStockWarn warn : currentWarnings.values())
+        {
+            warn.setWarnTime(now);
             warn.setHandleStatus("0");
-            warn.setCreateBy(SecurityUtils.getUsername());
+            warn.setCreateBy(username);
             insertList.add(warn);
         }
         if (insertList.isEmpty())
@@ -90,6 +119,12 @@ public class MedStockWarnServiceImpl implements IMedStockWarnService
         }
         medStockWarnMapper.batchMedStockWarn(insertList);
         return insertList.size();
+    }
+
+    private String warnKey(MedStockWarn warn)
+    {
+        return warn.getMedId() + ":" + (warn.getBatchId() == null ? "" : warn.getBatchId())
+                + ":" + warn.getWarnType();
     }
 
     /**
